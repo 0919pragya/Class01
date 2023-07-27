@@ -1,0 +1,264 @@
+library 'reference-pipeline'
+library 'AppServiceAccount'
+
+pipeline {
+	agent any
+	options {
+		timeout(time: 6, unit: 'HOURS')
+		disableConcurrentBuilds()
+		buildDiscarder(logRotator(numToKeepStr: '20'))
+	}
+	tools {
+		jdk 'JAVA_8'
+	} //End of tools
+  
+	parameters {
+		choice(name: 'ENVIRONMENT', choices: 'None\nL4\nLP', description: 'Target Environment')
+		choice(name: 'ACTION', choices: 'None\nCopy_files\nexecute_script\nETL_deployment', description: 'Target Action')
+	} //End of params
+	
+	environment {
+		EAI_NUMBER = "3538316"
+		EAI_NAME = "GNP_Analytics"
+		APP_NAME = "GNP_Analytics"
+
+		//
+		// CloudOps Provisioning Config
+		//
+		MF_BROKER="mf-broker.app.paas.fedex.com"
+		S3_ENDPOINT="https://s3-cf.ecs.ute.fedex.com"
+		ISSUER="https://purpleid.okta.com/oauth2/aus9s4vjt7GKaQnPf357/v1/token?grant_type=client_credentials&response_type=token&scope=Custom_Scope"
+		PROXY="internet.proxy.fedex.com:3128"
+		WLVM_TF_WORKSPACE="${params.ENVIRONMENT}"
+		WLVM_TF_WORKSPACE_JMS="${params.ENVIRONMENT}"
+
+		SSH_OPTIONS='-oStrictHostKeyChecking=no -oBatchMode=yes -oLogLevel=error -oUserKnownHostsFile=/dev/null'
+		/* Leave the following default values */
+		APP_VERSION = "9.5"
+		APP_GROUP = ""
+		NEXUS_REPO = ""
+		NEXUS_VERSION = ""
+		RELEASE_FLAG = false     
+	} //End of Environment variables
+  
+	stages {
+		stage('checkout') {
+			steps{
+			    script {
+			    	switch(ENVIRONMENT) {
+			    		case 'L4' :	BRANCH_NAME = "dev"
+			    		break
+			    		
+			    		case 'LP' :	BRANCH_NAME = "master"
+			    		break
+			    	}
+			    }
+				checkout changelog: false, poll: false, scm: [$class: 'GitSCM', branches: [[name: "*/${BRANCH_NAME}"]], extensions: [], userRemoteConfigs: [[credentialsId: 'gnpetlssh', url: 'git@github.com:FedEx/eai-3538316-gnp-analytics.git']]]
+			}
+		} //End of checkout Stage
+
+		stage('Environment') {
+			steps {
+				script {
+					switch(ENVIRONMENT) {
+						case 'L4' :	
+						env.WLVM_TARGET_SERVERS='u1041568.test.cloud.fedex.com,u1041569.test.cloud.fedex.com'
+						env.CLOUDOPS_HOSTS='u1041568.test.cloud.fedex.com,u1041569.test.cloud.fedex.com'
+						env.WLVM_TARGET_OPT='/opt/fedex/gnpetl'
+						env.WLVM_SSH_AGENT='gnpetl'
+						env.WLVM_SSH_USER='gnpetl'
+						env.SSH_OPTIONS='-oStrictHostKeyChecking=no -oBatchMode=yes -oLogLevel=error -oUserKnownHostsFile=/dev/null'
+						env.GNPETLENV='L4'
+						break
+						
+						case 'LP' :	
+						env.WLVM_TARGET_SERVERS='p1033374.prod.cloud.fedex.com,p1033375.prod.cloud.fedex.com'
+						env.CLOUDOPS_HOSTS='p1033374.prod.cloud.fedex.com,p1033375.prod.cloud.fedex.com'
+						env.WLVM_TARGET_OPT='/opt/fedex/gnpetl'
+						env.WLVM_SSH_AGENT='gnpetl_prod'
+						env.WLVM_SSH_USER='gnpetl'
+						env.SSH_OPTIONS='-oStrictHostKeyChecking=no -oBatchMode=yes -oLogLevel=error -oUserKnownHostsFile=/dev/null'
+						env.GNPETLENV='LP'
+						break
+					}
+					println '======================= UPDATED ENVIRONMENT VARS  ======================='
+					sh 'env | sort'
+					println '^^^^^^^^^^^^^^^^^^^^^^^ UPDATED ENVIRONMENT VARS  ^^^^^^^^^^^^^^^^^^^^^^^'  
+					println '======================= UPDATING DIRECTORY PERMISSIONS  ======================='
+					sh 'chmod 775 *'
+					println '^^^^^^^^^^^^^^^^^^^^^^^UPDATING DIRECTORY PERMISSIONS  ^^^^^^^^^^^^^^^^^^^^^^^'
+				}
+			}
+		}
+		stage("Copy_files") {
+			when {
+				anyOf {
+					environment name: 'ACTION', value: 'Copy_files'
+					environment name: 'ACTION', value: 'ETL_deployment'
+				}
+			}
+			steps {
+				println("===================Copying files on the ETL servers ==================")
+				Copy("${WLVM_SSH_AGENT}", "${WLVM_SSH_USER}", "${SSH_OPTIONS}", "${CLOUDOPS_HOSTS}") 
+			}
+		}
+		stage(execute_script) {
+			when {
+				anyOf {        
+					environment name: 'ACTION', value: 'execute_script'
+					environment name: 'ACTION', value: 'ETL_deployment'
+				}
+			}
+			steps {
+				println("===================Executing files on the ETL servers ==================")
+				Execute("${WLVM_SSH_AGENT}", "${WLVM_SSH_USER}", "${SSH_OPTIONS}", "${CLOUDOPS_HOSTS}") 
+			}
+		}
+	}
+}
+
+def Copy(sshAgent, sshUser, sshOptions, cloudOpsHosts) {
+	sshagent([sshAgent]) {
+		cloudOpsHosts.split(',').each { cloudOpsHost -> 
+			sh """#!/bin/bash
+			scp -r -o StrictHostKeyChecking=no ${WORKSPACE}/ab_initio_nodes/*.sh ${WLVM_SSH_USER}@${cloudOpsHost}:/tmp/
+			scp -r -o StrictHostKeyChecking=no ${WORKSPACE}/ab_initio_nodes/deployables ${WLVM_SSH_USER}@${cloudOpsHost}:/tmp/
+			"""
+		}
+	}
+}
+def Execute(sshAgent, sshUser, sshOptions, cloudOpsHosts) {
+	sshagent([sshAgent]) {
+		cloudOpsHosts.split(',').each { cloudOpsHost -> 
+			sh """#!/bin/bash
+			set +x;
+			ssh -o StrictHostKeyChecking=no  ${WLVM_SSH_USER}@${cloudOpsHost} 'cd /tmp/ && chmod -R 777 *.sh deployables'
+			ssh -o StrictHostKeyChecking=no  ${WLVM_SSH_USER}@${cloudOpsHost} 'cd /tmp/ && ls -lrt '
+			ssh -o StrictHostKeyChecking=no  ${WLVM_SSH_USER}@${cloudOpsHost} 'cd /tmp/ && ksh /tmp/colo_deploy_abinitio_node.sh'
+			"""
+		}
+	}
+}
+************************************************************************************************************************************************************************************************************************************************************************************************************************************************************************************************************************
+
+library 'reference-pipeline'
+library 'AppServiceAccount'
+
+pipeline {
+	agent any
+	options {
+		timeout(time: 6, unit: 'HOURS')
+		disableConcurrentBuilds()
+		buildDiscarder(logRotator(numToKeepStr: '20'))
+	}
+	tools {
+		jdk 'JAVA_8'
+	} //End of tools
+	
+	parameters {
+		choice(name: 'ENVIRONMENT', choices: 'None\nL4\nLP', description: 'Target Environment')
+		choice(name: 'ACTION', choices: 'None\nSAG_deployment', description: 'Target Action')
+	} //End of params
+
+	environment {
+		EAI_NUMBER = "3538316"
+		EAI_NAME = "GNP_Analytics"
+		APP_NAME = "GNP_Analytics"
+
+		//
+		// CloudOps Provisioning Config
+		//
+		MF_BROKER="mf-broker.app.paas.fedex.com"
+		S3_ENDPOINT="https://s3-cf.ecs.ute.fedex.com"
+		ISSUER="https://purpleid.okta.com/oauth2/aus9s4vjt7GKaQnPf357/v1/token?grant_type=client_credentials&response_type=token&scope=Custom_Scope"
+		PROXY="internet.proxy.fedex.com:3128"
+		WLVM_TF_WORKSPACE="${params.ENVIRONMENT}"
+		WLVM_TF_WORKSPACE_JMS="${params.ENVIRONMENT}"
+
+		SSH_OPTIONS='-oStrictHostKeyChecking=no -oBatchMode=yes -oLogLevel=error -oUserKnownHostsFile=/dev/null'
+		/* Leave the following default values */
+		APP_VERSION = "9.5"
+		APP_GROUP = ""
+		NEXUS_REPO = ""
+		NEXUS_VERSION = ""
+		RELEASE_FLAG = false     
+	} //End of Environment variables
+	
+	stages {
+		stage('checkout') {
+			steps{
+			    script {
+			    	switch(ENVIRONMENT) {
+			    		case 'L4' :	BRANCH_NAME = "dev"
+			    		break
+			    		
+			    		case 'LP' :	BRANCH_NAME = "master"
+			    		break
+			    	}
+			    }
+				checkout changelog: false, poll: false, scm: [$class: 'GitSCM', branches: [[name: "*/${BRANCH_NAME}"]], extensions: [], userRemoteConfigs: [[credentialsId: 'gnpetlssh', url: 'git@github.com:FedEx/eai-3538316-gnp-analytics.git']]]
+			}
+		} //End of checkout Stage
+		
+		stage('Environment') {
+			steps {
+				script {
+					switch(ENVIRONMENT) {
+						case 'L4' :	
+						env.WLVM_TARGET_SERVERS='u0006918.corp.ds.fedex.com'
+						env.CLOUDOPS_HOSTS='u0006918.corp.ds.fedex.com'
+						env.WLVM_TARGET_OPT='/opt/fedex/gnpetl'
+						env.WLVM_SSH_AGENT='gnpsag_dev'
+						env.WLVM_SSH_USER='gnpsag'
+						env.SSH_OPTIONS='-oStrictHostKeyChecking=no -oBatchMode=yes -oLogLevel=error -oUserKnownHostsFile=/dev/null'
+						env.GNPETLENV='L4'
+						break
+						
+						case 'LP' :	
+						env.WLVM_TARGET_SERVERS='p0008429.corp.ds.fedex.com,p0008430.corp.ds.fedex.com'
+						env.CLOUDOPS_HOSTS='p0008429.corp.ds.fedex.com,p0008430.corp.ds.fedex.com'
+						env.WLVM_TARGET_OPT='/opt/fedex/gnpetl'
+						env.WLVM_SSH_AGENT='gnpsag_prod'
+						env.WLVM_SSH_USER='gnpsag'
+						env.SSH_OPTIONS='-oStrictHostKeyChecking=no -oBatchMode=yes -oLogLevel=error -oUserKnownHostsFile=/dev/null'
+						env.GNPETLENV='LP'
+						break
+					}
+					println '======================= UPDATED ENVIRONMENT VARS  ======================='
+					sh 'env | sort'
+					println '^^^^^^^^^^^^^^^^^^^^^^^ UPDATED ENVIRONMENT VARS  ^^^^^^^^^^^^^^^^^^^^^^^'  
+					println '======================= UPDATING DIRECTORY PERMISSIONS  ======================='
+					sh 'chmod 775 *'
+					println '^^^^^^^^^^^^^^^^^^^^^^^UPDATING DIRECTORY PERMISSIONS  ^^^^^^^^^^^^^^^^^^^^^^^'
+				}
+			}
+		}
+		stage(execute_script){
+			when {
+				anyOf {        
+					environment name: 'ACTION', value: 'SAG_deployment'
+				}
+			}
+			steps{
+				println("===================Executing scripts on the SAG servers ==================")
+				Execute("${WLVM_SSH_AGENT}", "${WLVM_SSH_USER}", "${SSH_OPTIONS}", "${CLOUDOPS_HOSTS}") 
+			}
+		}
+	}
+}
+
+def Execute(sshAgent, sshUser, sshOptions, cloudOpsHosts) {
+	sshagent([sshAgent]){
+		cloudOpsHosts.split(',').each { cloudOpsHost -> 
+			sh "ssh -o StrictHostKeyChecking=no ${WLVM_SSH_USER}@${cloudOpsHost} whoami"
+			sh "pwd"
+			sh "scp -r -p -o StrictHostKeyChecking=no $workspace/sag_nodes/* ${WLVM_SSH_USER}@${cloudOpsHost}:/e:/TEMP"
+			echo "Done. Copying Done..."
+			//powershell must be run in elevated mode so it can install software properly
+			//powershell must be called within single quotes so the double quotes in it can escape properly
+			sh "ssh -o StrictHostKeyChecking=no ${WLVM_SSH_USER}@${cloudOpsHost} 'powershell -Command \"Start-Process PowerShell -Wait -Verb RunAs -ArgumentList ({ -command E:/TEMP/colo_deploy_sag_node.ps1 *> E:\\out.log })\"' "
+			sh "ssh -o StrictHostKeyChecking=no ${WLVM_SSH_USER}@${cloudOpsHost} powershell 'Get-Content \"E:/out.log\" ; Remove-Item \"E:/out.log\" '"
+			echo "deployment Done."
+		}
+	}
+}

@@ -1,0 +1,289 @@
+library 'reference-pipeline'
+library 'AppServiceAccount'
+def deploys = [:]
+def CLOUDOPS_HOSTS_L1_espeqs = ['u1081036.test.cloud.fedex.com', 'u1080685.test.cloud.fedex.com']
+def CLOUDOPS_HOSTS_L3_espeqs = ['u1076133.test.cloud.fedex.com', 'u1076444.test.cloud.fedex.com', 'u1076445.test.cloud.fedex.com', 'u1076139.test.cloud.fedex.com', 'u1076137.test.cloud.fedex.com', 'u1076138.test.cloud.fedex.com']
+def CLOUDOPS_HOSTS_L4_espeqs = ['u1074719.test.cloud.fedex.com', 'u1074718.test.cloud.fedex.com', 'u1074720.test.cloud.fedex.com', 'u1076153.test.cloud.fedex.com', 'u1076152.test.cloud.fedex.com', 'u1076154.test.cloud.fedex.com']
+
+pipeline {
+
+	agent {
+		label 'weblogic'
+	}
+	/*agent any*/
+	parameters {         
+		choice(name: 'ENVIRONMENT', choices: 'None\nL1\nL3\nL4', description: 'Target Environment')
+		string (description: 'Select the version to be used', defaultValue: 'EX:EQS-0.0.2-20230612.084839-1.tar', name: 'ARTIFACTVERSION')
+		choice(name: 'BRANCH_NAME', choices: ['master', 'eai5285_migration_feature', 'condor_migration_v2', 'condor_migration_v3', 'condor_migration_v4'], description: 'Pick something')
+		gitParameter branch: '', branchFilter: 'origin.*/(.*)', defaultValue: 'origin/master', name: 'SEPAI', quickFilterEnabled: true, selectedValue: 'NONE', sortMode: 'NONE', tagFilter: '*', type: 'GitParameterDefinition', useRepository: 'git@github.com:FedEx/eai-1179-sepai_bad.git'
+		choice(name: 'ACTION', choices: 'None\ndeploy weblogic\nstart weblogic\nrestart weblogic\nundeploy weblogic\nstop weblogic\nnexus\nclean\ncopy\nCopyAuthFiles\nRebuild', description: 'Target Action')
+		booleanParam 'NexusIQ'
+	}  
+	tools {
+		jdk 'JAVA_8'
+		ant 'Ant_1.10'
+		maven 'Maven 3.3.3'
+	} 
+	options {
+		disableConcurrentBuilds()
+		buildDiscarder(logRotator(numToKeepStr: '20'))
+	}
+	
+	environment {
+		SSH_OPTIONS='-oStrictHostKeyChecking=no -oBatchMode=yes -oLogLevel=error -oUserKnownHostsFile=/dev/null'
+		 CLOUDOPS_HOSTS_L1='u1081036.test.cloud.fedex.com u1080685.test.cloud.fedex.com'
+		 CLOUDOPS_HOSTS_L3='u1076133.test.cloud.fedex.com u1076444.test.cloud.fedex.com u1076445.test.cloud.fedex.com u1076139.test.cloud.fedex.com u1076137.test.cloud.fedex.com u1076138.test.cloud.fedex.com'
+		 CLOUDOPS_HOSTS_L4='u1074719.test.cloud.fedex.com u1074718.test.cloud.fedex.com u1074720.test.cloud.fedex.com u1076153.test.cloud.fedex.com u1076152.test.cloud.fedex.com u1076154.test.cloud.fedex.com'
+        NEXUS_CREDS_ID="NEXUS_CREDS_ID"
+		SSH_USER='espeqs'
+		WLVM_TF_WORKSPACE="${params.ENVIRONMENT}"
+		RELEASE_FLAG = false
+		SNAPSHOT_VERSION="0.0.2"
+		RELEASE_VERSION="0.0.4"
+
+    }
+    stages {
+
+	    stage('CodeCheckout') {
+            steps {
+                checkout changelog: false, poll: false, scm: [$class: 'GitSCM', branches: [[name: '${BRANCH_NAME}']], extensions: [], userRemoteConfigs: [[credentialsId: 'ssh-github', url: 'git@github.com:FedEx/eai-5285-esr.git']]]
+          	}
+		}
+	    stage('CodeCheckout Sepai') {
+			steps {
+			dir('sepai'){
+                checkout changelog: false, poll: false, scm: [$class: 'GitSCM', branches: [[name: '${SEPAI}']], extensions: [], userRemoteConfigs: [[credentialsId: 'sepai_GITHUB_account_SSH_privatekey', url: 'git@github.com:FedEx/eai-1179-sepai_bad.git']]]
+          	}
+		}
+		}
+		stage('CodeCheckout sepcommon') {
+			steps {
+			dir('sepcommon'){
+                checkout changelog: false, poll: false, scm: [$class: 'GitSCM', branches: [[name: '*/OL2305.01.SEPCOMMON']], extensions: [], userRemoteConfigs: [[credentialsId: 'sepcommon_GITHUB_account_SSH_privatekey', url: 'git@github.com:FedEx/eai-1179-sepcommon.git']]]
+          	}
+		}
+	}
+	stage('Initialize'){
+            steps{
+                dir ('espeqs/cm'){
+                script{
+                    APP_GROUP="eai5285"
+                    APP_VERSION = readMavenPom().getVersion()
+    				println "App version is ${APP_VERSION}"
+    				println "Group is ${APP_GROUP}"
+    				println "App Name is EQS"
+
+   	                if(BRANCH_NAME.contains('Condor')) {
+   	                    NEXUS_REPO = "release"
+   	                    NEXUS_VERSION="${APP_VERSION}"
+   	                    RELEASE_FLAG = true
+   	                }else{
+   	                    NEXUS_REPO = "snapshot"
+   	                    NEXUS_VERSION="${APP_VERSION}"
+   	                }
+
+                    println "Nexus Repo is ${NEXUS_REPO}"
+                }
+            }
+        }
+	}
+   stage('Build') {
+		when {
+			
+				environment name: 'ENVIRONMENT', value: 'L1'
+				environment name: 'ACTION', value: 'deploy weblogic'
+		}
+		steps {
+		        script{
+                                sh '''
+                cd ${WORKSPACE}
+                ls -ltr
+				cd ${WORKSPACE}/espeqs/cm
+				pwd
+				ls -ltr
+				mvn -f pom.xml clean package
+				ls -al && pwd
+				export BUILDING_APP=true; ./buildKit.sh all date
+				ls -al && pwd
+				rm -rf *.POST.tar && rm -rf *.PRE.tar
+				mv *.tar EQS-${SNAPSHOT_VERSION}-SNAPSHOT.tar
+				'''
+				}
+		}
+    }
+        stage('Nexus Staging Snapshot') {
+    	when {
+			
+				environment name: 'ENVIRONMENT', value: 'L1'
+				environment name: 'ACTION', value: 'deploy weblogic'
+		}
+        steps{
+            println "Uploading jar to EQS Nexus"
+                nexusArtifactUploader artifacts: [[artifactId: "EQS", classifier: '', file: "${WORKSPACE}/espeqs/cm/EQS-${SNAPSHOT_VERSION}-SNAPSHOT.tar", type: 'tar']],
+                    credentialsId: "${NEXUS_CREDS_ID}",
+                    groupId: "${APP_GROUP}",
+                    nexusUrl: 'nexus.prod.cloud.fedex.com:8443/nexus',
+                    nexusVersion: 'nexus3',
+                    protocol: 'https',
+                    repository: "snapshot",
+                    version: "${SNAPSHOT_VERSION}-SNAPSHOT"
+            println "uploaded jar to EQS Nexus"
+            sh 'sleep 10'
+			sh 'mv ${WORKSPACE}/espeqs/cm/*.tar ${WORKSPACE}/espeqs/cm/ISDM-espeqs_OL2305.01.SEPCOMMON_condor_v4-$(date +"%Y%m%d%H%M%S").tar'
+        }
+    }
+    stage('Nexus Pull from Snapshot') {
+		when {
+			
+				environment name: 'ACTION', value: 'deploy weblogic'
+				anyOf {
+				environment name: 'ENVIRONMENT', value: 'L3'
+				environment name: 'ENVIRONMENT', value: 'L4'
+				
+				}
+		}
+        steps{
+            
+        		 downloadNexusArtifact groupId: "${APP_GROUP}",
+                 artifactId: "EQS",
+                 repo: "snapshot",
+                 release: "FALSE".toBoolean(),
+                 extension: 'tar',
+                 version: "${SNAPSHOT_VERSION}-SNAPSHOT",
+                 downloadFileName: "${ARTIFACTVERSION}"
+				//sh 'wget -O ${WORKSPACE}/espeqs/cm/target/esp.tar "https://nexus.prod.cloud.fedex.com:8443/nexus/repository/snapshot/eai5285/EQS/${SNAPSHOT_VERSION}-SNAPSHOT/EQS-${ARTEFACT_VERSION}.tar"'
+				//sh 'ls -la ${WORKSPACE}/espeqs/cm/target/'
+				sh 'ls -la ${WORKSPACE}'
+				sh 'mv ${WORKSPACE}/${ARTIFACTVERSION} ${WORKSPACE}/espeqs'
+				sh 'rm -rf *.tar'
+				sh 'mv ${WORKSPACE}/espeqs/${ARTIFACTVERSION} ${WORKSPACE}'
+				sh 'cd ${WORKSPACE} && mv *.tar ISDM-espeqs_OL2305.01.SEPCOMMON_condor_v4-$(date +"%Y%m%d%H%M%S").tar'
+			}
+    }
+			stage('Deploy to L1') {
+				when {
+				environment name: 'ENVIRONMENT', value: 'L1'
+				environment name: 'ACTION', value: 'deploy weblogic'
+				}
+				
+				steps {
+					script {
+						sshagent(['hermes-keyper_app5285_devtest_espeqs']) {
+							CLOUDOPS_HOSTS_L1_espeqs.each { server ->
+								deploys[server] = {
+								sh """
+								set +x;
+								echo "********Starting deployment on $ENVIRONMENT server ${server}********"
+								ssh ${SSH_OPTIONS} ${SSH_USER}@"$server" 'cd /opt/fedex/espeqs/ && pwd && whoami'
+								scp -r ${SSH_OPTIONS} ${WORKSPACE}/espeqs/cm/env_preconfig/sepRunTimeWeblogic.xml ${SSH_USER}@"$server":/opt/fedex/espeqs/
+								#scp -r ${SSH_OPTIONS} ${WORKSPACE}/espeqs/cm/env_preconfig/createSSH_RSA.sh ${SSH_USER}@"$server":/opt/fedex/espeqs/
+								#ssh ${SSH_OPTIONS} ${SSH_USER}@"$server" 'cd /opt/fedex/espeqs/ && chmod -R 777 createSSH_RSA.sh && ./createSSH_RSA.sh'
+								ssh ${SSH_OPTIONS} ${SSH_USER}@"$server" 'cd /opt/fedex/espeqs/ && touch testEnv.cfg'
+								ssh ${SSH_OPTIONS} ${SSH_USER}@"$server" 'cd /opt/fedex/espeqs/ && mkdir isdm && chmod -R 755 isdm'
+								scp -r ${SSH_OPTIONS} ${WORKSPACE}/espeqs/cm/env_preconfig/testEnv.cfg ${SSH_USER}@"$server":/opt/fedex/espeqs/testEnv.cfg
+								scp -r ${SSH_OPTIONS} ${WORKSPACE}/espeqs/cm/*.tar ${SSH_USER}@"$server":/opt/fedex/espeqs/isdm
+								ssh ${SSH_OPTIONS} ${SSH_USER}@"$server" 'cd /opt/fedex/espeqs/isdm && chmod -R 777 *.tar && tar -xvf *.tar && chmod -R 777 * && cp -R /opt/fedex/espeqs/isdm/isdmLoad.sh /opt/fedex/espeqs/ && ./isdmLoad.sh jenkins'
+								"""
+								}
+
+							}
+							parallel deploys
+						}
+					}
+				}
+			}
+			stage('Deploy to L3') {
+				when {
+					environment name: 'ENVIRONMENT', value: 'L3'
+					environment name: 'ACTION', value: 'deploy weblogic'
+				}
+            
+            	steps {
+					script {
+						sshagent(['hermes-keyper_app5285_devtest_espeqs']) {
+							CLOUDOPS_HOSTS_L3_espeqs.each { server ->
+								deploys[server] = {
+								sh """
+								set +x;
+								echo "********Starting deployment on $ENVIRONMENT server ${server}********"
+								scp -r ${SSH_OPTIONS} ${WORKSPACE}/espeqs/cm/env_preconfig/sepRunTimeWeblogic.xml ${SSH_USER}@"$server":/opt/fedex/espeqs/
+								#scp -r ${SSH_OPTIONS} ${WORKSPACE}/espeqs/cm/env_preconfig/createSSH_RSA.sh ${SSH_USER}@"$server":/opt/fedex/espeqs/
+								#ssh ${SSH_OPTIONS} ${SSH_USER}@"$server" 'cd /opt/fedex/espeqs/ && chmod -R 777 createSSH_RSA.sh && ./createSSH_RSA.sh'
+								ssh ${SSH_OPTIONS} ${SSH_USER}@"$server" 'cd /opt/fedex/espeqs/ && touch testEnv.cfg'
+								ssh ${SSH_OPTIONS} ${SSH_USER}@"$server" 'cd /opt/fedex/espeqs/ && mkdir isdm && chmod -R 755 isdm'
+								scp -r ${SSH_OPTIONS} ${WORKSPACE}/espeqs/cm/env_preconfig/testEnvL3.cfg ${SSH_USER}@"$server":/opt/fedex/espeqs/testEnv.cfg
+								scp -r ${SSH_OPTIONS} ${WORKSPACE}/*.tar ${SSH_USER}@"$server":/opt/fedex/espeqs/isdm
+								ssh ${SSH_OPTIONS} ${SSH_USER}@"$server" 'cd /opt/fedex/espeqs/isdm && chmod -R 777 *.tar && tar -xvf *.tar && chmod -R 777 * && ./isdmLoad.sh jenkins'
+								"""
+								}
+
+							}
+							parallel deploys
+						}
+					}
+				}
+        	}
+			stage('Deploy to L4') {
+            	when {
+				environment name: 'ENVIRONMENT', value: 'L4'
+				environment name: 'ACTION', value: 'deploy weblogic'
+				}
+            	steps {
+					script {
+						sshagent(['hermes-keyper_app5285_devtest_espeqs']) {
+							CLOUDOPS_HOSTS_L4_espeqs.each { server ->
+								deploys[server] = {
+								sh """
+								set +x;
+								echo "********Starting deployment on $ENVIRONMENT server ${server}********"
+								scp -r ${SSH_OPTIONS} ${WORKSPACE}/espeqs/cm/env_preconfig/sepRunTimeWeblogic.xml ${SSH_USER}@"$server":/opt/fedex/espeqs/
+								#scp -r ${SSH_OPTIONS} ${WORKSPACE}/espeqs/cm/env_preconfig/createSSH_RSA.sh ${SSH_USER}@"$server":/opt/fedex/espeqs/
+								#ssh ${SSH_OPTIONS} ${SSH_USER}@"$server" 'cd /opt/fedex/espeqs/ && chmod -R 777 createSSH_RSA.sh && ./createSSH_RSA.sh'
+								ssh ${SSH_OPTIONS} ${SSH_USER}@"$server" 'cd /opt/fedex/espeqs/ && touch testEnv.cfg'
+								ssh ${SSH_OPTIONS} ${SSH_USER}@"$server" 'cd /opt/fedex/espeqs/ && mkdir isdm && chmod -R 755 isdm'
+								scp -r ${SSH_OPTIONS} ${WORKSPACE}/espeqs/cm/env_preconfig/testEnvL4.cfg ${SSH_USER}@"$server":/opt/fedex/espeqs/testEnv.cfg
+								scp -r ${SSH_OPTIONS} ${WORKSPACE}/*.tar ${SSH_USER}@"$server":/opt/fedex/espeqs/isdm
+								ssh ${SSH_OPTIONS} ${SSH_USER}@"$server" 'cd /opt/fedex/espeqs/isdm && chmod -R 777 *.tar && tar -xvf *.tar && chmod -R 777 * && ./isdmLoad.sh jenkins'
+								"""
+								}
+							}
+							parallel deploys
+						}
+					}
+				}
+        	}
+			stage('Undeploy') {
+            when {
+			environment name: 'ACTION', value: 'undeploy weblogic'
+			}
+            
+            steps {
+                    sshagent(['hermes-keyper_app5285_devtest_espeqs']) {
+                    sh '''
+                        set +x ;
+                        if [ $ENVIRONMENT == L1 ] ; then
+                        servers=${CLOUDOPS_HOSTS_L1}
+						elif [ $ENVIRONMENT == L3 ] ; then
+                        servers=${CLOUDOPS_HOSTS_L3}
+						elif [ $ENVIRONMENT == L4 ] ; then
+                        servers=${CLOUDOPS_HOSTS_L4}
+                        fi
+                        Date=$(date)
+                        for Item in $servers ;
+                        do
+                        echo "********Starting deployment on $ENVIRONMENT server $Item********"
+						echo "${SSH_USER}"
+						echo "${WLVM_SSH_AGENT}"
+						echo "${SSH_OPTIONS}"
+						echo "${Item}"
+						scp ${SSH_OPTIONS} ${WORKSPACE}/espeqs/cm/domain/bin/undeploy.sh ${SSH_USER}@"$Item":/opt/fedex/espeqs/
+                        ssh ${SSH_OPTIONS} ${SSH_USER}@"$Item" 'cd /opt/fedex/espeqs/ && chmod -R 777 undeploy.sh && ./undeploy.sh'
+                        ssh ${SSH_OPTIONS} ${SSH_USER}@"$Item" 'cd /opt/fedex/espeqs/  && rm -rf current && rm -rf isdm && rm -rf after_inst_script.sh && rm -rf before_inst_script.sh && rm -rf fallback.sh && rm -rf inst_functions.sh && rm -rf EAI5285.cmdb'
+                        ssh ${SSH_OPTIONS} ${SSH_USER}@"$Item" 'cd /opt/fedex/espeqs/ && rm -rf OL2305.01.SEPCOMMON_condor_v4-* && rm -rf uninstall.sh'
+                        done
+                        '''
+					}
+        	}
+		}
+    }
+}
