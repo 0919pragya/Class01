@@ -1,0 +1,79 @@
+. ~/.kshrc
+flink_bin=/opt/app/workload/mnt/common/v01/landingzone/tdismp1/workspace/flink-1.11.2/bin
+cd $flink_bin
+TODAY=`date +%a,\ %b\ %d\ %Y\ %r\ %Z`
+hostnamefull=`hostname -f`
+# scheduled on tdismpp1@zlpy23142 Crontab
+job_list=/opt/app/workload/mnt/common/v01/landingzone/tdatacd2/OpsScripts/job_running_status.txt
+./flink list -r > $job_list
+
+cat $job_list
+
+#1.     [PROD] [ALERT] [TDATA] [ISMP] Insession_Model job is in failed state
+Insession_Model_job_status=`cat $job_list | grep RUNNING | grep  -v "Service Tenure - Insession_Model" | grep -c "Insession_Model"`
+
+if [ $Insession_Model_job_status -eq 1 ]
+then
+    echo "Job is running fine"
+    Insession_Model_job_status_word="Active"
+else
+    #Insession_Model_job_status_word="Failed"
+
+    if [ $Insession_Model_job_status -lt 1 ]
+    then
+        Insession_Model_job_status_word="Failed"
+    else
+        Insession_Model_job_status_word="Multiple Instances of the job running"
+    fi
+
+    echo "JOB is FAILING"
+    (
+  #  echo -e "From: DL-TDATA-OPS@list.att.com"
+  #  echo -e "To: DL-TDATA-OPS@list.att.com"  #echo -e "To: kb089w@att.com"
+    echo -e "From: pp0910@att.com"
+    echo -e "To: pp0910@att.com"
+    echo -e "MIME-Version: 1.0"
+    echo -e "Content-Type: text/html"
+    echo -e "Content-Disposition: inline"
+    echo -e "Subject: [PROD] [ALERT] [TDATA] [ISMP] Insession_Model job is in failed state or multiple instances of jobs are running as of $TODAY "
+    echo "<html><head><style class=\"text/css\">
+            samp.r { font-size:40%;}
+            p.uppercase {text-transform: uppercase;}
+            table {width: 50%;
+            font-family:Tahoma,Arial,Helvetica,Geneva,sans-serif;}
+            td,th {
+                    font-size:9pt;
+                    border-collapse:collapse;
+                    border: 1px solid black;
+                    text-align: center;
+                    vertical-align: center;}
+                    th {background-color:#CFE0F1;}
+                    td.hilit_red {background-color:#FF0000;}
+                    td.hilit_orange {background-color:#FFA500;}
+                    td.hilit_green {background-color:#50D050;}
+            </style></head>"
+    echo -e "Hi Team <br><br>"
+    echo -e "Please find the job wise status below :  <br><br>"
+    echo -e "<body><table border=2 cellspacing=0 cellpadding=3>"
+    echo -e "<tr bgcolor="#ADD8E6">"
+    echo -e "<th rowspan="1">Job Name</th>"
+    echo -e "<th rowspan="1">Job Status</th>"
+    echo -e "<th rowspan="1">Business Impact</th>"
+    echo -e "</tr>"
+    echo -e "<tr><td>Insession_Model</td><td>${Insession_Model_job_status_word}</td><td>Sales online will not be able to return latest identified (daily) uni
+fied BANs to Salesforce for predictive intent.</td></tr>";
+    echo -e "</table><br>"
+    echo -e "<font face="Tahoma", size="2">"
+    echo -e "<u><b>Steps for Resolution: </b></u><br><br>"
+    echo -e "Follow the resolution steps for the issue: ISMP Job Failing Alerts, located on this wiki page : https://wiki.web.att.com/display/TdataStreams/Fr
+equent+PROD+Issues. <br><br><br>"
+    echo -e "<font face="Courier New" size="2">"
+    echo -e "Email generated on $TODAY <br>"
+    echo -e "Script: Metrics_alert.sh <br>"
+    echo -e "Environment: PROD <br>"
+    echo -e "Hostname: $hostnamefull <br>"
+    echo -e "To be removed from the distribution, please send a request to DL-TDATA-OPS@list.att.com</font>"
+    echo -e "</body></html>"
+    ) | /sbin/sendmail -t
+fi
+rm -rf $job_list

@@ -1,0 +1,74 @@
+pagecache , dentries and inodes
+
+[root@blph909 em1069]# cat /root/flush_cache.ksh
+#!/bin/ksh
+os_version=$(cat /etc/redhat-release)
+typeset -i total
+typeset -i cached
+typeset -i threshold
+case $os_version in
+    *Santiago*)
+        total=$(free -m|grep Mem:|awk '{print $2}')
+        cached=$(free -m|grep Mem:|awk '{print $7}')
+        threshold=$(($total*20/100))
+        if [[ $cached -gt $threshold ]]
+        then
+            echo "$(date) | Cached memory is $cached, threshold $threshold exceeded"
+            echo "$(date) | Cached memory is $cached, threshold $threshold exceeded" >> /var/log/drop_cache.em1069.log
+            echo "Trying to clean cache"
+            /bin/sync; echo 3 > /proc/sys/vm/drop_caches
+        else
+            echo "$(date) | Cached memory is $cached, threshold $threshold not exceeded"
+            echo "$(date) | Cached memory is $cached, threshold $threshold not exceeded" >> /var/log/drop_cache.em1069.log
+        fi
+     ;;
+    *Maipo*)
+        total=$(free -m|grep Mem:|awk '{print $2}')
+        cached=$(free -m|grep Mem:|awk '{print $6}')
+        free=$(free -m|grep Mem:|awk '{print $4}')
+        threshold=$(($total*20/100))
+        if [[ $cached -gt $threshold ]]
+        then
+            echo "$(date) | Free memory is $free. Cached memory is $cached, threshold $threshold exceeded"
+            echo "$(date) | Free memory is $free. Cached memory is $cached, threshold $threshold exceeded" >> /var/log/drop_cache.em1069.log
+            echo "Trying to clean cache"
+            /bin/sync; echo 3 > /proc/sys/vm/drop_caches
+        else
+            echo "$(date) | Free memory is $free. Cached memory is $cached, threshold $threshold not exceeded"
+            echo "$(date) | Free memory is $free. Cached memory is $cached, threshold $threshold not exceeded" >> /var/log/drop_cache.em1069.log
+        fi
+     ;;
+    *)
+        echo "Not supported"
+esac
+[root@blph909 em1069]#
+
+Fri Jul 22 01:30:02 CDT 2022 | Free memory is 1024532. Cached memory is 1027158, threshold 619200 exceeded
+Fri Jul 29 01:30:01 CDT 2022 | Free memory is 599077. Cached memory is 1405653, threshold 619200 exceeded
+Fri Aug  5 01:30:01 CDT 2022 | Free memory is 185716. Cached memory is 1812597, threshold 619200 exceeded
+Fri Aug 12 01:30:01 CDT 2022 | Free memory is 314051. Cached memory is 1685126, threshold 619200 exceeded
+Fri Aug 19 01:30:02 CDT 2022 | Free memory is 340006. Cached memory is 1651978, threshold 619200 exceeded
+Fri Aug 26 01:30:02 CDT 2022 | Free memory is 369037. Cached memory is 1707710, threshold 619200 exceeded
+Fri Sep  2 01:30:01 CDT 2022 | Free memory is 401097. Cached memory is 1577206, threshold 619200 exceeded
+Fri Sep  9 01:30:02 CDT 2022 | Free memory is 599489. Cached memory is 1395639, threshold 619200 exceeded
+Fri Sep 16 01:30:01 CDT 2022 | Free memory is 642601. Cached memory is 1332169, threshold 619200 exceeded
+Fri Sep 23 01:30:02 CDT 2022 | Free memory is 558096. Cached memory is 1430648, threshold 619200 exceeded
+[pp0910@blph909 ~]$
+
+
+[9/28 5:32 PM] Monge, Esteban
+
+that is the script
+
+
+
+[9/28 5:32 PM] Monge, Esteban
+
+the way to include on the cronjob is some what like:
+
+
+
+[9/28 5:32 PM] Monge, Esteban
+
+### Flush memory cache
+30 1 * * 5 /root/flush_cache.ksh

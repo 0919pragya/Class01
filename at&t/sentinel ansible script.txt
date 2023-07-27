@@ -1,0 +1,46 @@
+- hosts: "{{ EnvName }}"
+  gather_facts: false
+  become: true
+  become_user: root
+
+
+
+
+  tasks:
+    - name: CPU Threshold
+      shell: cpu_threshold='1'
+	  file_name="s1-perf"
+      cpu_idle=`top -b -n 1 | grep Cpu | awk '{print $8}'|cut -f 1 -d "."`
+      cpu_use=`expr 100 - $cpu_idle`
+      if [ $cpu_use -gt $cpu_threshold ]; then
+        file_check=`top -b -n 1 | head -n 12 | tail -n 5 | awk '{print $12}'`
+        if [[ "$file_check" == *"$file_name"* ]]; then
+			echo $file_check
+                echo $hostnamefull, " s1-perf is among top 5 CPU consuming process " >> $delay_list_Sentinel
+        fi
+			else
+				echo "cpu ok!!!"
+        fi
+      register: output1
+
+
+
+   - name: executing the script
+      shell: sync; echo 1 > /proc/sys/vm/drop_caches
+
+
+
+   - name: cache memory after executing the script
+      shell: free -h|grep Mem:|awk '{print $6}'
+      register: output2
+
+
+
+
+    - name: script information
+      vars:
+       msg: |
+            cache memory in GB before running the script: {{ output1.stdout }}
+            cache memory in GB after running the script: {{ output2.stdout }}
+      debug:
+       msg: "{{ msg.split('\n') }}"

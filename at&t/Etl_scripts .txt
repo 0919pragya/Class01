@@ -1,0 +1,69 @@
+[tdscore1@blph1032 AlertSCRIPTS]$ more ETLtoSTREAMS_script.sh
+#!/bin/bash
+## Author  : ps9446, Version V1.0
+## This monitor is owned by  ICAP - Ops team
+#set -x
+# scheduled on tdscore1@blph1032 Crontab
+curdate=`date +%Y-%m-%d`
+TODAY=`date +%a,\ %b\ %d\ %Y\ %r\ %Z`
+hostnamefull=`hostname -f`
+
+touch /opt/app/workload/mnt/common/v01/landingzone/scripts/prodSupport_new/bin/delay_list.txt
+file_monitoring_delay_list="/opt/app/workload/mnt/common/v01/landingzone/scripts/prodSupport_new/bin/delay_list.txt"
+echo '<b>'Path'</b>', '<b>'File Pattern'</b>', '<b>'Latest Received File Name'</b>','<b>'Latest Received File Timestamp'</b>' >> $file_monitoring_delay_list
+
+configfile=/opt/app/workload/mnt/common/v01/landingzone/scripts/prodSupport_new/bin/Jenkins.CICD/AlertSCRIPTS/ETLtoSTREAMS_config.txt
+cat $configfile | while read line1
+do
+   dst_path=`echo $line1 | cut -d ',' -f 1`
+   file_pattern=`echo $line1 | cut -d ',' -f 2`
+
+cd $dst_path
+                latest_file_name=`ls -lrth $file_pattern | tail -1 | awk '{print $9}'`
+                latest_file_ts=`stat -c%Z $latest_file_name`							epoc timestamp (1662449619)
+                latest_file_time=`stat -c '%y' $latest_file_name | cut -d '.' -f 1`       (date & time)
+                latest_file_name_time=`stat -c '%y' $latest_file_name | cut -d ' ' -f 1`  (date)
+                if [ $latest_file_name_time == $curdate ]
+                then
+                    echo "File exists"
+                else
+                    echo "file does not exists"
+                    echo $dst_path,$file_pattern,$latest_file_name,$latest_file_time >> $file_monitoring_delay_list
+                fi
+done
+
+email_validation=`cat $file_monitoring_delay_list | wc -l`
+if [ $email_validation -gt 1 ]
+then
+    tmpfile="/opt/app/workload/mnt/common/v01/landingzone/scripts/prodSupport_new/bin/alert.html"
+    echo 'Content-Type: text/html; charset="us-ascii" ' >> "$tmpfile"
+    echo "<html>" >> "$tmpfile"
+    echo "<Body>" >> "$tmpfile"
+    awk 'BEGIN{FS=","; print "<html><body><b><table border=1>"} {print "<tr>";for(i=1;i<=NF;i++)print "<td>" $i"</td>";print "</tr>"} END{print "</table></b>
+</body></html>"}'     "$file_monitoring_delay_list" >> "$tmpfile"
+    echo "</Body>" >> "$tmpfile"
+    echo "</html>" >> "$tmpfile"
+    (
+    echo "From: DL-TDATA-OPS@list.att.com"
+    echo "To: DL-TDATA-OPS@list.att.com"
+    echo "MIME-Version: 1.0"
+    echo "Subject: [PROD] [ALERT] [TDATA] [SALES] ETL to STREAM - expected file missing as of $TODAY"
+    echo "Content-Type: text/html"
+
+    cat $tmpfile
+    echo -e " <br>"
+    echo -e "<b>Steps of Resolution:</b> <br>"
+    echo -e "Follow the resolution steps for the issue: ETL to STREAM, located on this wiki page: https://wiki.web.att.com/display/TdataStreams/Frequent+PROD
++Issues. <br>"
+    echo -e "<br>Email generated on $TODAY <br>"
+    echo -e "Script: ETLtoSTREAMS_script.sh   <br>"
+    echo -e "Environment: PROD <br>"
+    echo -e "Hostname: $hostnamefull <br>"
+    echo -e "To be removed from the distribution, please send a request to DL-TDATA-OPS@list.att.com <br>"
+    ) | /usr/sbin/sendmail -t
+    rm $tmpfile
+fi
+
+rm -rf $file_monitoring_delay_list
+
+[tdscore1@blph1032 AlertSCRIPTS]$

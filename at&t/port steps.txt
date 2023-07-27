@@ -1,0 +1,35 @@
+Requirement: Prevent running same process simultaneously. Each usecase is responsible to implement this requirement on all their cronjobs with their ownership, and be responsible to run the script with the logic identified below
+Solution: 
+Configure the solo script on your server. PFA solo script here
+2. Figure out any of the unused port in the server. You can use the following command to find out the available ports. We would suggest to use "port 333xx" if they are available.
+
+netstat -lat : is used to find out the used port, so we can use any port except the ones listed in previous output
+
+>> we need to make sure the post selected to be used would show up in the search result of the port search command. I am  looking into this and will confirm asap.
+
+3. Bind this port with solo to wrap your command under this prevention policy. The solo script will be move to a NAS common directory, such as "*/v01/RunSoloProcess/bin/solo"
+
+General Format for preventing any script from running simultaneously more than 1 instances:
+<path_to_solo> -port=<port> <path_to_script>
+Example:
+/opt/app/workload/scripts/bin/solo -port=33333 /opt/app/workload/scripts/S_process.sh
+For Cronjob:
+<cron_config> <path_to_solo> -port=<port> <path_to_script>
+Example:
+* * * * * /opt/app/workload/scripts/bin/solo -port=33333 /opt/app/workload/scripts/S_process.sh
+
+Herein I have configured solo at used port 33333 for wrapping the S_process.sh
+
+
+zlpy20329.vci.att.com
+160 app migration to private cloud to azure public cloud - colo switch 
+assesment 
+deploy octa
+octa integration 
+splunk deployment 
+code deployment manually - ci/cd pipeline 
+
+
+delegate to 
+
+ss -ln | grep port

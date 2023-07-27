@@ -1,0 +1,46 @@
+[m45129@zlpy20329 ~]$ vi sentinel_check.yaml
+- hosts: "{{ target }}"
+  gather_facts: false
+  #become: true
+  #become_user: root
+
+  tasks:
+
+    - name: Check the CPU %
+      shell: grep 'cpu ' /proc/stat | awk '{usage=($2+$4)*100/($2+$4+$5)} END {print usage "%"}'
+      register: cpu_perc
+
+    - name: check if top process have s1 when cpu is above threshold
+      shell: top -b -n 1 | head -n 12 | tail -n 5 | awk '{print $12}' | grep s1
+      register: top_process_s1
+      when: cpu_perc > 1
+      failed_when: top_process_s1.rc == 0 and top_process_s1.rc !=0
+
+    - name: Copy the s1 process to local
+      lineinfile:
+        line: '{{ inventory_hostname }}, s1-perf is among top 5 CPU consuming process '
+        dest: /home/m45129/Usage_list.txt
+        remote_src: yes
+      delegate_to: localhost
+      when: top_process_s1.stdout != ""
+~
+*/8 * * * * /home/m45129/sentinel_check_SDP.sh
+*/11 * * * * /home/m45129/sentinel_check_TDICE.sh
+*/14 * * * * /home/m45129/sentinel_check_TDATA.sh
+
+[PROD] [ALERT] [TDATA] Sentinel process - CPU Utilization high
+
+Steps of Resolution:
+Follow the resolution steps for the issue: Sentinel process, located on this wiki page: https://wiki.web.att.com/display/TdataStreams/Frequent+PROD+Issues
+
+If Alert subject say [PROD] [ALERT] [TDATA]/[TDICE]/[SDP] Sentinel process - CPU Utilization high
+Usually this alert should associate with Grafana alert or some other server alerts. monitor closely with other alerts and follow the protocol of those alerts. in Addition, follow this SoR as following.
+Login to the server on which the Sentinel process failed according to the alert.
+Run the top command and check if the s1-perf is in the top 5 process
+If yes then - Run the pipeline - https://az-community-four.vci.att.com/jenkins/job/com.att.icapsdp/job/Under_Construction/job/Ansible/job/Sentinel_pipeline_Prod/
+Continue Monitor CPU status on Grafana. After 1 hour, only if the CPU status is back to normal, re-start the Sentinel process thru the pipeline.
+ 
+ 
+ NAS
+
+ if st

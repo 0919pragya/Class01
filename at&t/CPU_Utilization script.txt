@@ -1,0 +1,65 @@
+[tdscore1@blph1022 AlertSCRIPTS]$ cat Sentinel_process.sh
+#!/bin/bash
+## Author  : pp0910, Version V1.0
+## This monitor is owned by  ICAP - Ops team
+#set -x
+# scheduled on tdscore1@blph1022 Crontab
+curdate=`date +%Y-%m-%d`
+TODAY=`date +%a,\ %b\ %d\ %Y\ %r\ %Z`
+hostnamefull=`hostname -f`
+
+touch /opt/app/workload/mnt/common/v01/landingzone/scripts/prodSupport_new/bin/Usage_list.txt
+delay_list_Sentinel="/opt/app/workload/mnt/common/v01/landingzone/scripts/prodSupport_new/bin/Usage_list.txt"
+echo '<b>' Hostname '</b>','<b>' Message '</b>' >> $delay_list_Sentinel
+
+echo `date`
+#cpu use threshold
+#cpu_threshold='1'
+echo $cpu_threshold
+file_name="s1-perf"
+cpu_idle=`top -b -n 1 | grep Cpu | awk '{print $8}'|cut -f 1 -d "."`
+echo $cpu_idle
+cpu_use=`expr 100 - $cpu_idle`
+#echo $cpu_use
+echo "cpu utilization: $cpu_use"
+if [ $cpu_use -gt $cpu_threshold ]; then
+        file_check=`top -b -n 1 | head -n 12 | tail -n 5 | awk '{print $12}'`
+        if [[ "$file_check" == *"$file_name"* ]]; then
+        echo $file_check
+                echo $hostnamefull, " s1-perf is among top 5 CPU consuming process " >> $delay_list_Sentinel
+        fi
+else
+        echo "cpu ok!!!"
+fi
+
+email_validation=`cat $delay_list_Sentinel | wc -l`
+if [ $email_validation -gt 1 ]
+then
+    tmpfile="/opt/app/workload/mnt/common/v01/landingzone/scripts/prodSupport_new/bin/excess.html"
+    echo 'Content-Type: text/html; charset="us-ascii" ' >> "$tmpfile"
+    echo "<html>" >> "$tmpfile"
+    echo "<Body>" >> "$tmpfile"
+    awk 'BEGIN{FS=","; print "<html><body><b><table border=1>"} {print "<tr>";for(i=1;i<=NF;i++)print "<td>" $i"</td>";print "</tr>"} END{print "</table></b></body></html><br>"}'     "$delay_list_Sentinel" >> "$tmpfile"
+    echo "</Body>" >> "$tmpfile"
+    echo "</html>" >> "$tmpfile"
+    (
+    echo "From: pp0910@att.com"
+    echo "To: pp0910@att.com"
+    echo "MIME-Version: 1.0"
+    echo "Subject: [PROD] [ALERT] [TDICE] Sentinel  process - CPU Utilization high as of $TODAY"
+    echo "Content-Type: text/html"
+
+    cat $tmpfile
+    echo -e " <br>"
+    echo -e "<b>Steps of Resolution:</b> <br>"
+    echo -e "Follow the resolution steps for the issue: Sentinel issue, located on this wiki page: https://wiki.web.att.com/display/TdataStreams/Frequent+PROD+Issues. <br>"
+    echo -e "<br>Email generated on $TODAY <br>"
+    echo -e "Script: Sentinel_process.sh   <br>"
+    echo -e "Environment: PROD <br>"
+    echo -e "Hostname: $hostnamefull <br>"
+    echo -e "To be removed from the distribution, please send a request to DL-TDATA-OPS@list.att.com <br>"
+    ) | /usr/sbin/sendmail -t
+    rm $tmpfile
+fi
+
+rm -rf $delay_list_Sentinel

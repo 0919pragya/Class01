@@ -1,0 +1,43 @@
+#!/bin/bash
+## Author  : pp0910, Version V1.0
+## This monitor is owned by  ICAP - Ops team
+#set -x
+
+
+TODAY=`date +%a,\ %b\ %d\ %Y\ %r\ %Z`
+hostnamefull=`hostname -f`
+
+check_status=`ps -ef | grep flink | grep StandaloneSessionClusterEntrypoint | grep -v grep | awk '$1=="tdismp1"' | wc -l`
+
+echo "Value: $check_status"
+
+if [ $check_status == 1 ]
+then
+        echo "Job manager is up and running"
+else
+        echo "Job manager is down"
+        from='DL-TDATA-OPS@list.att.com'
+        to='DL-TDATA-OPS@list.att.com'
+        
+        mailx -s "Action Required: ISMP Job manager is down as of $TODAY" -r $from $to <<EOF
+
+
+        STEPS OF RESOLUTION:
+        1. Verify if the URL is accessible: http://zlpy18009.vci.att.com:18009/#/overview
+        2. If the URL is not up then, login to zlpy18009.vci.att.com
+        3. sudo su - tdismp1
+        4. cd /opt/app/workload/mnt/common/v01/landingzone/tdismp1/workspace/flink-1.11.2
+        5. cd bin
+        6. Run the command: ./jobmanager.sh start
+        7. Run the command to verify the process: ps -ef | grep flink | grep StandaloneSessionClusterEntrypoint | grep -v grep | awk '$1=="tdismp1"'
+        8. Monitor the URL for final verification.
+
+        Email generated on $TODAY
+        Script: Jobmanagerstatus.sh
+        Environment: PROD
+        Hostname: $hostnamefull
+
+        To be removed from the distribution, please send a request to DL-TDATA-OPS@list.att.com
+
+EOF
+fi
