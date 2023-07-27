@@ -1,0 +1,849 @@
+wlst*
+************************************************************************************************************************************************************************************************************************************************************************************************************
+
+create.sh
+#! /bin/sh
+
+# Pre-create domain
+
+mkdir -p ${DOMAIN_HOME}
+if [ ${?} -ne 0 ]; then exit 1; fi
+
+# Create domain
+
+PATH=${PATH}:${WDT_HOME}/bin
+createDomain.sh \
+  -use_encryption \
+  -domain_type WLS \
+  -domain_parent ${DOMAIN_PARENT} \
+  -model_file model.yaml \
+  -archive_file model.zip \
+  -variable_file model.properties \
+  < model.secret
+if [ ${?} -ne 0 ]; then exit 1; fi
+
+# Post-create domain
+
+sed -i -e 's/\${PROXY_SETTINGS}/\${usgendom_PROPERTIES} \${PROXY_SETTINGS}/g' ${DOMAIN_HOME}/bin/startWebLogic.sh
+if [ ${?} -ne 0 ]; then exit 1; fi
+
+mystatus=0
+pushd ${DOMAIN_PARENT}
+ln -s ${JAVA_HOME} jre
+if [ ${?} -ne 0 ]; then mystatus=1; fi
+popd
+if [ ${mystatus} -ne 0 ]; then exit 1; fi
+
+# Exit gracefully
+
+exit 0
+**********************************************************************************************************************************
+env.shexport JAVA_HOME=@@JAVA_HOME@@
+export ORACLE_HOME=@@ORACLE_HOME@@
+export WDT_HOME=@@WDT_HOME@@
+export DOMAIN_PARENT=@@DOMAIN_PARENT@@
+export DOMAIN_NAME=@@DOMAIN_NAME@@
+export DOMAIN_HOME=@@DOMAIN_HOME@@
+export DOMAIN_ADMIN_PORT=@@DOMAIN_ADMIN_PORT@@
+export DOMAIN_MANAGED_PORT=@@DOMAIN_MANAGED_PORT@@
+export DOMAIN_USERNAME=@@DOMAIN_USERNAME@@
+export DOMAIN_PASSWORD=@@DOMAIN_PASSWORD@@
+*********************************************************************************************************************************
+model.propertiesCLUSTER_SIZE=@@CLUSTER_SIZE@@
+RESOURCE_TARGET=@@RESOURCE_TARGET@
+DB_PASSWORD=@@DB_PWD_STG@@
+DB_URL=@@DB_URL@@
+#JDBC.L1-usgendom-JDBC-Data-Source.PasswordEncrypted=rdsusgendomapp1
+#JDBC.L1-usgendom-JDBC-Data-Source.user.Value=usgendom_app
+#JDBC.L2-usgendom-JDBC-Data-Source.PasswordEncrypted=rdsusgendomapp1
+#JDBC.L2-usgendom-JDBC-Data-Source.user.Value=usgendom_app
+#JDBC.L3-usgendom-JDBC-Data-Source.PasswordEncrypted=rdsusgendomapp1
+#JDBC.L3-usgendom-JDBC-Data-Source.user.Value=usgendom_app
+#JDBC.L4-usgendom-JDBC-Data-Source.PasswordEncrypted=rdsusgendomapp1
+#JDBC.L4-usgendom-JDBC-Data-Source.user.Value=usgendom_app
+KEYSTORE_PASS=password1
+********************************************************************************************************************************
+model.yamldomainInfo:
+    AdminUserName: '@@ENV:DOMAIN_USERNAME@@'
+    AdminPassword: '@@ENV:DOMAIN_PASSWORD@@'
+    domainBin:
+      - wlsdeploy/domainBin/env.sh
+      - wlsdeploy/domainBin/bin_Common.sh
+      - wlsdeploy/domainBin/start.sh
+      - wlsdeploy/domainBin/stop.sh
+topology:
+    Name: '@@ENV:DOMAIN_NAME@@'
+    DomainVersion: 12.2.1.4
+    AdministrationPortEnabled: true
+    AdministrationPort: 9902
+    Log:
+            FileName: /var/fedex/genesis/gendom/logs/weblogic/usgendom.log
+            LogFileSeverity: Trace
+            MemoryBufferSeverity: Notice
+            RotationType: bySize
+            RotationTime: '00:00'
+            FileTimeSpan: 24
+            LogFileRotationDir: /var/fedex/genesis/gendom/logs/weblogic/
+            RotateLogOnStartup: true
+            FileCount: 25
+            FileMinSize: 5000
+            NumberOfFilesLimited: true
+    AdminServerName: genadmin
+    Cluster:
+        'usdom-alpha':
+            ClusterMessagingMode: unicast
+            WeblogicPluginEnabled: inherit
+            SecureReplicationEnabled: true
+            ClusterAddress: 'gen-lvl3-us-gendom-las01.test.cloud.fedex.com,gen-lvl3-us-gendom-las02.test.cloud.fedex.com'
+        'usdom-bravo':
+            ClusterMessagingMode: unicast
+            WeblogicPluginEnabled: inherit
+            SecureReplicationEnabled: true
+            ClusterAddress: 'gen-lvl3-us-gendom-las03.test.cloud.fedex.com,gen-lvl3-us-gendom-las04.test.cloud.fedex.com'
+        'usrecog':
+            ClusterMessagingMode: unicast
+            WeblogicPluginEnabled: inherit
+            SecureReplicationEnabled: true
+            ClusterAddress: 'gen-lvl3-us-recog-las01.test.cloud.fedex.com,gen-lvl3-us-recog-las02.test.cloud.fedex.com'
+    Server:
+        genadmin:
+            #Machine: 'u1062546.test.cloud.fedex.com
+            ListenAddress: 'gen-lvl3-us-admin-las01.test.cloud.fedex.com'
+            ListenPort: '@@ENV:DOMAIN_ADMIN_PORT@@'
+            TunnelingEnabled: true
+            CustomIdentityKeyStoreFileName: '/opt/fedex/genesis/gendom/current/cfg/genusdomL3.jks'
+            KeyStores: CustomIdentityAndJavaStandardTrust
+            CustomIdentityKeyStoreType: jks
+            CustomIdentityKeyStorePassPhraseEncrypted: 'genusdom@7353'
+            SSL:
+                Enabled: false
+                ListenPort: 7002
+                ServerPrivateKeyPassPhraseEncrypted: 'genusdom@7353'
+                ServerPrivateKeyAlias: 'genusdoml3'
+                UseServerCerts: true
+                ClientCertificateEnforced: false
+                TwoWaySSLEnabled: true
+            Log:
+                FileName: /var/fedex/genesis/gendom/logs/weblogic/genadmin.log
+                LogFileSeverity: Trace
+                MemoryBufferSeverity: Notice
+                NumberOfFilesLimited: true
+                RotateLogOnStartup: true
+                RotationType: bySize
+                RotationTime: '00:00'
+                FileTimeSpan: 24
+                LogFileRotationDir: /var/fedex/genesis/gendom/logs/weblogic/
+                FileCount: 25
+                FileMinSize: 5000
+            WebServer:    
+                WebServerLog:
+                    FileName: /var/fedex/genesis/gendom/logs/weblogic/access.log
+                    RotationType: bySize
+                    RotationTime: '00:00'
+                    FileTimeSpan: 24
+                    LogFileRotationDir: /var/fedex/genesis/gendom/logs/weblogic/
+                    RotateLogOnStartup: true
+                    FileMinSize: 5000
+                    FileCount: 25
+        gendom11:
+            Cluster: 'usdom-alpha'
+            Machine: 'gen-lvl3-us-gendom-las01-u1064310'
+            ListenAddress: 'gen-lvl3-us-gendom-las01.test.cloud.fedex.com'
+            ListenPort: 7260
+            CustomIdentityKeyStoreFileName: '/opt/fedex/genesis/gendom/current/cfg/genusdomL3.jks'
+            KeyStores: CustomIdentityAndJavaStandardTrust
+            CustomIdentityKeyStoreType: jks
+            CustomIdentityKeyStorePassPhraseEncrypted: 'genusdom@7353'
+            SSL:
+                ListenPort: 7261
+                ServerPrivateKeyPassPhraseEncrypted: 'genusdom@7353'
+                ServerPrivateKeyAlias: 'genusdoml3'
+                Enabled: true
+                UseServerCerts: true
+                ClientCertificateEnforced: false
+                TwoWaySSLEnabled: true
+            Log:
+                FileName: /var/fedex/genesis/gendom/logs/weblogic/gendom11.log
+                LogFileSeverity: Trace
+                MemoryBufferSeverity: Notice
+                NumberOfFilesLimited: true
+                RotateLogOnStartup: true
+                RotationType: bySize
+                RotationTime: '00:00'
+                FileTimeSpan: 24
+                LogFileRotationDir: /var/fedex/genesis/gendom/logs/weblogic/
+                FileCount: 25
+                FileMinSize: 5000
+            WebServer:    
+                WebServerLog:
+                    FileName: /var/fedex/genesis/gendom/logs/weblogic/access.log
+                    RotationType: bySize
+                    RotationTime: '00:00'
+                    FileTimeSpan: 24
+                    LogFileRotationDir: /var/fedex/genesis/gendom/logs/weblogic/
+                    RotateLogOnStartup: true
+                    FileMinSize: 5000
+                    FileCount: 25
+            ServerStart:
+                JavaHome: /opt/fedex/genesis/java8_current
+                JavaVendor:	Oracle
+                BeaHome: /opt/fedex/genesis/wl12214_current
+                RootDirectory:	/opt/fedex/genesis/gendom/current/usgendom
+                Arguments: '-Xms3072m -Xmx3072m -Xloggc:/var/fedex/genesis/gendom/logs/weblogic/gc.log -XX:+UseAdaptiveSizePolicy -XX:+UseG1GC -XX:+UseGCLogFileRotation -XX:+PrintGCDetails -XX:+PrintGCDateStamps -XX:+HeapDumpOnOutOfMemoryError -XX:MaxGCPauseMillis=200 -XX:NumberOfGCLogFiles=10 -XX:GCLogFileSize=1m -XX:InitiatingHeapOccupancyPercent=45 -XX:HeapDumpPath=/var/fedex/genesis/gendom/logs/weblogic/ -Djava.net.preferIPv4Stack=true -Dweblogic.security.SSL.ignoreHostnameVerification=true -Dweblogic.wsee.wstx.wsat.deployed=false -Dweblogic.security.SSL.minimumProtocolVersion=TLSv1.2 -Djava.security.properties=/opt/security/java.security.override -javaagent:/opt/appd/current/appagent/javaagent.jar -Dappdynamics.http.proxyHost=internet.proxy.fedex.com -Dappdynamics.http.proxyPort=3128 -Dappdynamics.agent.applicationName=genusdom-7353 -Dappdynamics.agent.tierName=genusdom-7353 -Dappdynamics.agent.nodeName=gen-lvl3-us-gendom-las01-u1064310.test.cloud.fedex.com -Dappdynamics.controller.ssl.enabled=true -Dappdynamics.controller.sslPort=443 -Dappdynamics.agent.logs.dir=/var/fedex/appd/logs/7353/gen-lvl3-us-gendom-las01 -Dappdynamics.agent.runtime.dir=/var/fedex/appd/logs/7353/gen-lvl3-us-gendom-las01 -Dappdynamics.controller.hostName=fedex1-test.saas.appdynamics.com -Dappdynamics.controller.port=443 -Dappdynamics.agent.accountName=fedex1-test -Dappdynamics.agent.accountAccessKey=1dce5fc52c17'
+                ClassPath: '/opt/fedex/genesis/gendom/servercfg/jms8.0.5/fedexjms.jar:/opt/fedex/genesis/gendom/servercfg/jms8.0.5/commons-logging-1.2.jar:/opt/fedex/genesis/gendom/servercfg/jms8.0.5/jms-2.0.jar:/opt/fedex/genesis/gendom/servercfg/jms8.0.5/netty-all-4.1.34.Final-redhat-00001.jar:/opt/fedex/genesis/gendom/servercfg/jms8.0.5/proton-j-0.31.0.redhat-00001.jar:/opt/fedex/genesis/gendom/servercfg/jms8.0.5/qpid-jms-client-0.45.0.jar:/opt/fedex/genesis/gendom/servercfg/jms8.0.5/slf4j-api-1.7.25.jar:/opt/fedex/genesis/gendom/servercfg/jms8.0.5/tibjms.jar:/opt/fedex/genesis/gendom/servercfg/jms8.0.5/tibcrypt.jar'
+        gendom12:
+            Cluster: 'usdom-alpha'
+            Machine: 'gen-lvl3-us-gendom-las02-u1064309'
+            ListenAddress: 'gen-lvl3-us-gendom-las02.test.cloud.fedex.com'
+            ListenPort: 7260
+            CustomIdentityKeyStoreFileName: '/opt/fedex/genesis/gendom/current/cfg/genusdomL3.jks'
+            KeyStores: CustomIdentityAndJavaStandardTrust
+            CustomIdentityKeyStoreType: jks
+            CustomIdentityKeyStorePassPhraseEncrypted: 'genusdom@7353'
+            SSL:
+                ListenPort: 7261
+                ServerPrivateKeyPassPhraseEncrypted: 'genusdom@7353'
+                ServerPrivateKeyAlias: 'genusdoml3'
+                Enabled: true
+                UseServerCerts: true
+                ClientCertificateEnforced: false
+                TwoWaySSLEnabled: true
+            Log:
+                FileName: /var/fedex/genesis/gendom/logs/weblogic/gendom12.log
+                LogFileSeverity: Trace
+                MemoryBufferSeverity: Notice
+                NumberOfFilesLimited: true
+                RotateLogOnStartup: true
+                RotationType: bySize
+                RotationTime: '00:00'
+                FileTimeSpan: 24
+                LogFileRotationDir: /var/fedex/genesis/gendom/logs/weblogic/
+                FileCount: 25
+                FileMinSize: 5000
+            WebServer:    
+                WebServerLog:
+                    FileName: /var/fedex/genesis/gendom/logs/weblogic/access.log
+                    RotationType: bySize
+                    RotationTime: '00:00'
+                    FileTimeSpan: 24
+                    LogFileRotationDir: /var/fedex/genesis/gendom/logs/weblogic/
+                    RotateLogOnStartup: true
+                    FileMinSize: 5000
+                    FileCount: 25
+            ServerStart:
+                JavaHome: /opt/fedex/genesis/java8_current
+                JavaVendor:	Oracle
+                BeaHome: /opt/fedex/genesis/wl12214_current
+                RootDirectory:	/opt/fedex/genesis/gendom/current/usgendom
+                Arguments: '-Xms3072m -Xmx3072m -Xloggc:/var/fedex/genesis/gendom/logs/weblogic/gc.log -XX:+UseAdaptiveSizePolicy -XX:+UseG1GC -XX:+UseGCLogFileRotation -XX:+PrintGCDetails -XX:+PrintGCDateStamps -XX:+HeapDumpOnOutOfMemoryError -XX:MaxGCPauseMillis=200 -XX:NumberOfGCLogFiles=10 -XX:GCLogFileSize=1m -XX:InitiatingHeapOccupancyPercent=45 -XX:HeapDumpPath=/var/fedex/genesis/gendom/logs/weblogic/ -Djava.net.preferIPv4Stack=true -Dweblogic.security.SSL.ignoreHostnameVerification=true -Dweblogic.wsee.wstx.wsat.deployed=false -Dweblogic.security.SSL.minimumProtocolVersion=TLSv1.2 -Djava.security.properties=/opt/security/java.security.override -javaagent:/opt/appd/current/appagent/javaagent.jar -Dappdynamics.http.proxyHost=internet.proxy.fedex.com -Dappdynamics.http.proxyPort=3128 -Dappdynamics.agent.applicationName=genusdom-7353 -Dappdynamics.agent.tierName=genusdom-7353 -Dappdynamics.agent.nodeName=gen-lvl3-us-gendom-las02-u1064309.test.cloud.fedex.com -Dappdynamics.controller.ssl.enabled=true -Dappdynamics.controller.sslPort=443 -Dappdynamics.agent.logs.dir=/var/fedex/appd/logs/7353/gen-lvl3-us-gendom-las02 -Dappdynamics.agent.runtime.dir=/var/fedex/appd/logs/7353/gen-lvl3-us-gendom-las02 -Dappdynamics.controller.hostName=fedex1-test.saas.appdynamics.com -Dappdynamics.controller.port=443 -Dappdynamics.agent.accountName=fedex1-test -Dappdynamics.agent.accountAccessKey=1dce5fc52c17'
+                ClassPath: '/opt/fedex/genesis/gendom/servercfg/jms8.0.5/fedexjms.jar:/opt/fedex/genesis/gendom/servercfg/jms8.0.5/commons-logging-1.2.jar:/opt/fedex/genesis/gendom/servercfg/jms8.0.5/jms-2.0.jar:/opt/fedex/genesis/gendom/servercfg/jms8.0.5/netty-all-4.1.34.Final-redhat-00001.jar:/opt/fedex/genesis/gendom/servercfg/jms8.0.5/proton-j-0.31.0.redhat-00001.jar:/opt/fedex/genesis/gendom/servercfg/jms8.0.5/qpid-jms-client-0.45.0.jar:/opt/fedex/genesis/gendom/servercfg/jms8.0.5/slf4j-api-1.7.25.jar:/opt/fedex/genesis/gendom/servercfg/jms8.0.5/tibjms.jar:/opt/fedex/genesis/gendom/servercfg/jms8.0.5/tibcrypt.jar'
+        gendom13:
+            Cluster: 'usdom-bravo'
+            Machine: 'gen-lvl3-us-gendom-las03-u1064311'
+            ListenAddress: 'gen-lvl3-us-gendom-las03.test.cloud.fedex.com'
+            ListenPort: 7260
+            CustomIdentityKeyStoreFileName: '/opt/fedex/genesis/gendom/current/cfg/genusdomL3.jks'
+            KeyStores: CustomIdentityAndJavaStandardTrust
+            CustomIdentityKeyStoreType: jks
+            CustomIdentityKeyStorePassPhraseEncrypted: 'genusdom@7353'
+            SSL:
+                ListenPort: 7261
+                ServerPrivateKeyPassPhraseEncrypted: 'genusdom@7353'
+                ServerPrivateKeyAlias: 'genusdoml3'
+                Enabled: true
+                UseServerCerts: true
+                ClientCertificateEnforced: false
+                TwoWaySSLEnabled: true
+            Log:
+                FileName: /var/fedex/genesis/gendom/logs/weblogic/gendom13.log
+                LogFileSeverity: Trace
+                MemoryBufferSeverity: Notice
+                NumberOfFilesLimited: true
+                RotateLogOnStartup: true
+                RotationType: bySize
+                RotationTime: '00:00'
+                FileTimeSpan: 24
+                LogFileRotationDir: /var/fedex/genesis/gendom/logs/weblogic/
+                FileCount: 25
+                FileMinSize: 5000
+            WebServer:    
+                WebServerLog:
+                    FileName: /var/fedex/genesis/gendom/logs/weblogic/access.log
+                    RotationType: bySize
+                    RotationTime: '00:00'
+                    FileTimeSpan: 24
+                    LogFileRotationDir: /var/fedex/genesis/gendom/logs/weblogic/
+                    RotateLogOnStartup: true
+                    FileMinSize: 5000
+                    FileCount: 25
+            ServerStart:
+                JavaHome: /opt/fedex/genesis/java8_current
+                JavaVendor:	Oracle
+                BeaHome: /opt/fedex/genesis/wl12214_current
+                RootDirectory:	/opt/fedex/genesis/gendom/current/usgendom
+                Arguments: '-Xms3072m -Xmx3072m -Xloggc:/var/fedex/genesis/gendom/logs/weblogic/gc.log -XX:+UseAdaptiveSizePolicy -XX:+UseG1GC -XX:+UseGCLogFileRotation -XX:+PrintGCDetails -XX:+PrintGCDateStamps -XX:+HeapDumpOnOutOfMemoryError -XX:MaxGCPauseMillis=200 -XX:NumberOfGCLogFiles=10 -XX:GCLogFileSize=1m -XX:InitiatingHeapOccupancyPercent=45 -XX:HeapDumpPath=/var/fedex/genesis/gendom/logs/weblogic/ -Djava.net.preferIPv4Stack=true -Dweblogic.security.SSL.ignoreHostnameVerification=true -Dweblogic.wsee.wstx.wsat.deployed=false -Dweblogic.security.SSL.minimumProtocolVersion=TLSv1.2 -Djava.security.properties=/opt/security/java.security.override -javaagent:/opt/appd/current/appagent/javaagent.jar -Dappdynamics.http.proxyHost=internet.proxy.fedex.com -Dappdynamics.http.proxyPort=3128 -Dappdynamics.agent.applicationName=genusdom-7353 -Dappdynamics.agent.tierName=genusdom-7353 -Dappdynamics.agent.nodeName=gen-lvl3-us-gendom-las03-u1064311.test.cloud.fedex.com -Dappdynamics.controller.ssl.enabled=true -Dappdynamics.controller.sslPort=443 -Dappdynamics.agent.logs.dir=/var/fedex/appd/logs/7353/gen-lvl3-us-gendom-las03 -Dappdynamics.agent.runtime.dir=/var/fedex/appd/logs/7353/gen-lvl3-us-gendom-las03 -Dappdynamics.controller.hostName=fedex1-test.saas.appdynamics.com -Dappdynamics.controller.port=443 -Dappdynamics.agent.accountName=fedex1-test -Dappdynamics.agent.accountAccessKey=1dce5fc52c17'
+                ClassPath: '/opt/fedex/genesis/gendom/servercfg/jms8.0.5/fedexjms.jar:/opt/fedex/genesis/gendom/servercfg/jms8.0.5/commons-logging-1.2.jar:/opt/fedex/genesis/gendom/servercfg/jms8.0.5/jms-2.0.jar:/opt/fedex/genesis/gendom/servercfg/jms8.0.5/netty-all-4.1.34.Final-redhat-00001.jar:/opt/fedex/genesis/gendom/servercfg/jms8.0.5/proton-j-0.31.0.redhat-00001.jar:/opt/fedex/genesis/gendom/servercfg/jms8.0.5/qpid-jms-client-0.45.0.jar:/opt/fedex/genesis/gendom/servercfg/jms8.0.5/slf4j-api-1.7.25.jar:/opt/fedex/genesis/gendom/servercfg/jms8.0.5/tibjms.jar:/opt/fedex/genesis/gendom/servercfg/jms8.0.5/tibcrypt.jar'
+        gendom14:
+            Cluster: 'usdom-bravo'
+            Machine: 'gen-lvl3-us-gendom-las04-u1064312'
+            ListenAddress: 'gen-lvl3-us-gendom-las04.test.cloud.fedex.com'
+            ListenPort: 7260
+            CustomIdentityKeyStoreFileName: '/opt/fedex/genesis/gendom/current/cfg/genusdomL3.jks'
+            KeyStores: CustomIdentityAndJavaStandardTrust
+            CustomIdentityKeyStoreType: jks
+            CustomIdentityKeyStorePassPhraseEncrypted: 'genusdom@7353'
+            SSL:
+                ListenPort: 7261
+                ServerPrivateKeyPassPhraseEncrypted: 'genusdom@7353'
+                ServerPrivateKeyAlias: 'genusdoml3'
+                Enabled: true
+                UseServerCerts: true
+                ClientCertificateEnforced: false
+                TwoWaySSLEnabled: true
+            Log:
+                FileName: /var/fedex/genesis/gendom/logs/weblogic/gendom14.log
+                LogFileSeverity: Trace
+                MemoryBufferSeverity: Notice
+                NumberOfFilesLimited: true
+                RotateLogOnStartup: true
+                RotationType: bySize
+                RotationTime: '00:00'
+                FileTimeSpan: 24
+                LogFileRotationDir: /var/fedex/genesis/gendom/logs/weblogic/
+                FileCount: 25
+                FileMinSize: 5000
+            WebServer:    
+                WebServerLog:
+                    FileName: /var/fedex/genesis/gendom/logs/weblogic/access.log
+                    RotationType: bySize
+                    RotationTime: '00:00'
+                    FileTimeSpan: 24
+                    LogFileRotationDir: /var/fedex/genesis/gendom/logs/weblogic/
+                    RotateLogOnStartup: true
+                    FileMinSize: 5000
+                    FileCount: 25
+            ServerStart:
+                JavaHome: /opt/fedex/genesis/java8_current
+                JavaVendor:	Oracle
+                BeaHome: /opt/fedex/genesis/wl12214_current
+                RootDirectory:	/opt/fedex/genesis/gendom/current/usgendom
+                Arguments: '-Xms3072m -Xmx3072m -Xloggc:/var/fedex/genesis/gendom/logs/weblogic/gc.log -XX:+UseAdaptiveSizePolicy -XX:+UseG1GC -XX:+UseGCLogFileRotation -XX:+PrintGCDetails -XX:+PrintGCDateStamps -XX:+HeapDumpOnOutOfMemoryError -XX:MaxGCPauseMillis=200 -XX:NumberOfGCLogFiles=10 -XX:GCLogFileSize=1m -XX:InitiatingHeapOccupancyPercent=45 -XX:HeapDumpPath=/var/fedex/genesis/gendom/logs/weblogic/ -Djava.net.preferIPv4Stack=true -Dweblogic.security.SSL.ignoreHostnameVerification=true -Dweblogic.wsee.wstx.wsat.deployed=false -Dweblogic.security.SSL.minimumProtocolVersion=TLSv1.2 -Djava.security.properties=/opt/security/java.security.override -javaagent:/opt/appd/current/appagent/javaagent.jar -Dappdynamics.http.proxyHost=internet.proxy.fedex.com -Dappdynamics.http.proxyPort=3128 -Dappdynamics.agent.applicationName=genusdom-7353 -Dappdynamics.agent.tierName=genusdom-7353 -Dappdynamics.agent.nodeName=gen-lvl3-us-gendom-las04-u1064312.test.cloud.fedex.com -Dappdynamics.controller.ssl.enabled=true -Dappdynamics.controller.sslPort=443 -Dappdynamics.agent.logs.dir=/var/fedex/appd/logs/7353/gen-lvl3-us-gendom-las04 -Dappdynamics.agent.runtime.dir=/var/fedex/appd/logs/7353/gen-lvl3-us-gendom-las04 -Dappdynamics.controller.hostName=fedex1-test.saas.appdynamics.com -Dappdynamics.controller.port=443 -Dappdynamics.agent.accountName=fedex1-test -Dappdynamics.agent.accountAccessKey=1dce5fc52c17'
+                ClassPath: '/opt/fedex/genesis/gendom/servercfg/jms8.0.5/fedexjms.jar:/opt/fedex/genesis/gendom/servercfg/jms8.0.5/commons-logging-1.2.jar:/opt/fedex/genesis/gendom/servercfg/jms8.0.5/jms-2.0.jar:/opt/fedex/genesis/gendom/servercfg/jms8.0.5/netty-all-4.1.34.Final-redhat-00001.jar:/opt/fedex/genesis/gendom/servercfg/jms8.0.5/proton-j-0.31.0.redhat-00001.jar:/opt/fedex/genesis/gendom/servercfg/jms8.0.5/qpid-jms-client-0.45.0.jar:/opt/fedex/genesis/gendom/servercfg/jms8.0.5/slf4j-api-1.7.25.jar:/opt/fedex/genesis/gendom/servercfg/jms8.0.5/tibjms.jar:/opt/fedex/genesis/gendom/servercfg/jms8.0.5/tibcrypt.jar'
+        genrecog3:
+            Cluster: 'usrecog'
+            Machine: 'gen-lvl3-us-recog-las01-u1064637'
+            ListenAddress: 'gen-lvl3-us-recog-las01.test.cloud.fedex.com'
+            ListenPort: 7320
+            CustomIdentityKeyStoreFileName: '/opt/fedex/genesis/genrecog/current/cfg/genusdomL3.jks'
+            KeyStores: CustomIdentityAndJavaStandardTrust
+            CustomIdentityKeyStoreType: jks
+            CustomIdentityKeyStorePassPhraseEncrypted: 'genusdom@7353'
+            SSL:
+                ListenPort: 7321
+                ServerPrivateKeyPassPhraseEncrypted: 'genusdom@7353'
+                ServerPrivateKeyAlias: 'genusdoml3'
+                Enabled: true
+            Log:
+                FileName: /var/fedex/genesis/genrecog/logs/weblogic/genrecog3.log
+                LogFileSeverity: Trace
+                MemoryBufferSeverity: Notice
+                NumberOfFilesLimited: true
+                RotateLogOnStartup: true
+                RotationType: bySize
+                RotationTime: '00:00'
+                FileTimeSpan: 24
+                LogFileRotationDir: /var/fedex/genesis/genrecog/logs/weblogic/
+                FileCount: 25
+                FileMinSize: 5000
+            WebServer:    
+                WebServerLog:
+                    FileName: /var/fedex/genesis/genrecog/logs/weblogic/access.log
+                    RotationType: bySize
+                    RotationTime: '00:00'
+                    FileTimeSpan: 24
+                    LogFileRotationDir: /var/fedex/genesis/genrecog/logs/weblogic/
+                    RotateLogOnStartup: true
+                    FileMinSize: 5000
+                    FileCount: 25
+            ServerStart:
+                JavaHome: /opt/fedex/genesis/java8_current
+                JavaVendor:	Oracle
+                BeaHome: /opt/fedex/genesis/wl12214_current
+                RootDirectory:	/opt/fedex/genesis/genrecog/current/usgendom
+                Arguments: '-Xms1024m -Xmx1024m -Xloggc:/var/fedex/genesis/genrecog/logs/weblogic/gc.log -XX:+UseAdaptiveSizePolicy -XX:+UseG1GC -XX:+UseGCLogFileRotation -XX:+PrintGCDetails -XX:+PrintGCDateStamps -XX:+HeapDumpOnOutOfMemoryError -XX:MaxGCPauseMillis=200 -XX:NumberOfGCLogFiles=10 -XX:GCLogFileSize=1m -XX:InitiatingHeapOccupancyPercent=45 -XX:HeapDumpPath=/var/fedex/genesis/genrecog/logs/weblogic/ -Djava.net.preferIPv4Stack=true -Dweblogic.security.SSL.ignoreHostnameVerification=true -Dweblogic.wsee.wstx.wsat.deployed=false -Dweblogic.security.SSL.minimumProtocolVersion=TLSv1.2 -Djava.security.properties=/opt/security/java.security.override  -javaagent:/opt/appd/current/appagent/javaagent.jar -Dappdynamics.http.proxyHost=internet.proxy.fedex.com -Dappdynamics.http.proxyPort=3128 -Dappdynamics.agent.applicationName=genusdom-7353 -Dappdynamics.agent.tierName=genusdom-7353 -Dappdynamics.agent.nodeName=gen-lvl3-us-recog-las01-u1064637.test.cloud.fedex.com -Dappdynamics.controller.ssl.enabled=true -Dappdynamics.controller.sslPort=443 -Dappdynamics.agent.logs.dir=/var/fedex/appd/logs/7353/gen-lvl3-us-recog-las01 -Dappdynamics.agent.runtime.dir=/var/fedex/appd/logs/7353/gen-lvl3-us-recog-las01 -Dappdynamics.controller.hostName=fedex1-test.saas.appdynamics.com -Dappdynamics.controller.port=443 -Dappdynamics.agent.accountName=fedex1-test -Dappdynamics.agent.accountAccessKey=1dce5fc52c17'
+                ClassPath: ''
+        genrecog4:
+            Cluster: 'usrecog'
+            Machine: 'gen-lvl3-us-recog-las02-u1064638'
+            ListenAddress: 'gen-lvl3-us-recog-las02.test.cloud.fedex.com'
+            ListenPort: 7320
+            CustomIdentityKeyStoreFileName: '/opt/fedex/genesis/genrecog/current/cfg/genusdomL3.jks'
+            KeyStores: CustomIdentityAndJavaStandardTrust
+            CustomIdentityKeyStoreType: jks
+            CustomIdentityKeyStorePassPhraseEncrypted: 'genusdom@7353'
+            SSL:
+                ListenPort: 7321
+                ServerPrivateKeyPassPhraseEncrypted: 'genusdom@7353'
+                ServerPrivateKeyAlias: 'genusdoml3'
+                Enabled: true
+            Log:
+                FileName: /var/fedex/genesis/genrecog/logs/weblogic/genrecog4.log
+                LogFileSeverity: Trace
+                MemoryBufferSeverity: Notice
+                NumberOfFilesLimited: true
+                RotateLogOnStartup: true
+                RotationType: bySize
+                RotationTime: '00:00'
+                FileTimeSpan: 24
+                LogFileRotationDir: /var/fedex/genesis/genrecog/logs/weblogic/
+                FileCount: 25
+                FileMinSize: 5000
+            WebServer:    
+                WebServerLog:
+                    FileName: /var/fedex/genesis/genrecog/logs/weblogic/access.log
+                    RotationType: bySize
+                    RotationTime: '00:00'
+                    FileTimeSpan: 24
+                    LogFileRotationDir: /var/fedex/genesis/genrecog/logs/weblogic/
+                    RotateLogOnStartup: true
+                    FileMinSize: 5000
+                    FileCount: 25
+            ServerStart:
+                JavaHome: /opt/fedex/genesis/java8_current
+                JavaVendor:	Oracle
+                BeaHome: /opt/fedex/genesis/wl12214_current
+                RootDirectory:	/opt/fedex/genesis/genrecog/current/usgendom
+                Arguments: '-Xms1024m -Xmx1024m -Xloggc:/var/fedex/genesis/genrecog/logs/weblogic/gc.log -XX:+UseAdaptiveSizePolicy -XX:+UseG1GC -XX:+UseGCLogFileRotation -XX:+PrintGCDetails -XX:+PrintGCDateStamps -XX:+HeapDumpOnOutOfMemoryError -XX:MaxGCPauseMillis=200 -XX:NumberOfGCLogFiles=10 -XX:GCLogFileSize=1m -XX:InitiatingHeapOccupancyPercent=45 -XX:HeapDumpPath=/var/fedex/genesis/genrecog/logs/weblogic/ -Djava.net.preferIPv4Stack=true -Dweblogic.security.SSL.ignoreHostnameVerification=true -Dweblogic.wsee.wstx.wsat.deployed=false -Dweblogic.security.SSL.minimumProtocolVersion=TLSv1.2 -Djava.security.properties=/opt/security/java.security.override  -javaagent:/opt/appd/current/appagent/javaagent.jar -Dappdynamics.http.proxyHost=internet.proxy.fedex.com -Dappdynamics.http.proxyPort=3128 -Dappdynamics.agent.applicationName=genusdom-7353 -Dappdynamics.agent.tierName=genusdom-7353 -Dappdynamics.agent.nodeName=gen-lvl3-us-recog-las02-u1064638.test.cloud.fedex.com -Dappdynamics.controller.ssl.enabled=true -Dappdynamics.controller.sslPort=443 -Dappdynamics.agent.logs.dir=/var/fedex/appd/logs/7353/gen-lvl3-us-recog-las02 -Dappdynamics.agent.runtime.dir=/var/fedex/appd/logs/7353/gen-lvl3-us-recog-las02 -Dappdynamics.controller.hostName=fedex1-test.saas.appdynamics.com -Dappdynamics.controller.port=443 -Dappdynamics.agent.accountName=fedex1-test -Dappdynamics.agent.accountAccessKey=1dce5fc52c17'
+                ClassPath: ''
+    UnixMachine:       
+        'gen-lvl3-us-gendom-las01-u1064310':
+            NodeManager:                 
+                ListenAddress: 'gen-lvl3-us-gendom-las01.test.cloud.fedex.com'
+                ListenPort: 5567
+                NMType: SSL
+        'gen-lvl3-us-gendom-las02-u1064309':
+            NodeManager:                 
+                ListenAddress: 'gen-lvl3-us-gendom-las02.test.cloud.fedex.com'
+                ListenPort: 5567
+                NMType: SSL
+        'gen-lvl3-us-gendom-las03-u1064311':
+            NodeManager:                 
+                ListenAddress: 'gen-lvl3-us-gendom-las03.test.cloud.fedex.com'
+                ListenPort: 5567
+                NMType: SSL
+        'gen-lvl3-us-gendom-las04-u1064312':
+            NodeManager:                 
+                ListenAddress: 'gen-lvl3-us-gendom-las04.test.cloud.fedex.com'
+                ListenPort: 5567
+                NMType: SSL
+        'gen-lvl3-us-recog-las01-u1064637':
+            NodeManager:                 
+                ListenAddress: 'gen-lvl3-us-recog-las01.test.cloud.fedex.com'
+                ListenPort: 5567
+                NMType: SSL
+        'gen-lvl3-us-recog-las02-u1064638':
+            NodeManager:                 
+                ListenAddress: 'gen-lvl3-us-recog-las02.test.cloud.fedex.com'
+                ListenPort: 5567
+                NMType: SSL
+
+resources:
+    JDBCSystemResource:
+        'usdom-GENDOM_PERM_01_GENESIS_LAS_S1-genesis_usdom_tester_app':
+            Target: 'usdom-alpha'
+            JdbcResource:
+                JDBCConnectionPoolParams:
+                    InitialCapacity: 3
+                    MaxCapacity: 15
+                    TestTableName: SQL SELECT 1 FROM DUAL
+                    TestConnectionsOnReserve: true
+                JDBCDataSourceParams:
+                    JNDIName: 'javax.jdbc.UBRDataSource'
+                    GlobalTransactionsProtocol: OnePhaseCommit
+                JDBCDriverParams:
+                    DriverName: oracle.jdbc.OracleDriver
+                    URL: 'jdbc:oracle:thin:@ldap://eusoud.prod.fedex.com/GENDOM_PERM_01_GENESIS_LAS_S1,cn=OracleContext'
+                    PasswordEncrypted: 'ThisisanexampleofaPassword999'
+                    Properties:
+                        user:
+                            Value: genesis_tester_app
+                        oracle.net.CONNECT_TIMEOUT:
+                            Value: 5000
+                        oracle.jdbc.ReadTimeout:
+                            Value: 30000
+        'usdom-GENDOM_PERM_01_GENESIS_LAS_S1-genesis_ede_app':
+            Target: 'usdom-bravo'
+            JdbcResource:
+                JDBCConnectionPoolParams:
+                    MaxCapacity: 22
+                    TestTableName: SQL SELECT 1 FROM DUAL
+                    TestConnectionsOnReserve: true
+                JDBCDataSourceParams:
+                    JNDIName: 'javax.jdbc.EdeDataSource'
+                    GlobalTransactionsProtocol: EmulateTwoPhaseCommit
+                JDBCDriverParams:
+                    DriverName: oracle.jdbc.OracleDriver
+                    URL: '@@PROP:DB_URL@@'
+                    PasswordEncrypted: '@@PROP:DB_PASSWORD@@'
+                    Properties:
+                        user:
+                            Value: genesis_ede_app
+        'usdom-GENDOM_PERM_01_GENESIS_LAS_S1-genesis_usdom_allocate_app':
+            Target: 'usdom-alpha'
+            JdbcResource:
+                JDBCConnectionPoolParams:
+                    MaxCapacity: 22
+                    TestTableName: SQL SELECT 1 FROM DUAL
+                    TestConnectionsOnReserve: true
+                JDBCDataSourceParams:
+                    JNDIName: 'javax.jdbc.VAllocateDataSource'
+                    GlobalTransactionsProtocol: EmulateTwoPhaseCommit
+                JDBCDriverParams:
+                    DriverName: oracle.jdbc.OracleDriver
+                    URL: '@@PROP:DB_URL@@'
+                    PasswordEncrypted: '@@PROP:DB_PASSWORD@@'
+                    Properties:
+                        user:
+                            Value: genesis_usdom_allocate_app
+        'usdom-GENDOM_PERM_01_GENESIS_LAS_S1-genesis_usdom_datatovend_app':
+            Target: 'usdom-alpha'
+            JdbcResource:
+                JDBCConnectionPoolParams:
+                    MaxCapacity: 22
+                    TestTableName: SQL SELECT 1 FROM DUAL
+                    TestConnectionsOnReserve: true
+                JDBCDataSourceParams:
+                    JNDIName: 'javax.jdbc.dataToVendorDataSource'
+                    GlobalTransactionsProtocol: EmulateTwoPhaseCommit
+                JDBCDriverParams:
+                    DriverName: oracle.jdbc.OracleDriver
+                    URL: '@@PROP:DB_URL@@'
+                    PasswordEncrypted: '@@PROP:DB_PASSWORD@@'
+                    Properties:
+                        user:
+                            Value: genesis_usdom_datatovend_app
+        'usdom-GENDOM_PERM_01_GENESIS_LAS_S1-genesis_usdom_lookup_app':
+            Target: 'usdom-bravo'
+            JdbcResource:
+                JDBCConnectionPoolParams:
+                    MaxCapacity: 22
+                    TestTableName: SQL SELECT 1 FROM DUAL
+                    TestConnectionsOnReserve: true
+                JDBCDataSourceParams:
+                    JNDIName: 'javax.jdbc.USLookupDataSource'
+                    GlobalTransactionsProtocol: EmulateTwoPhaseCommit
+                JDBCDriverParams:
+                    DriverName: oracle.jdbc.OracleDriver
+                    URL: '@@PROP:DB_URL@@'
+                    PasswordEncrypted: '@@PROP:DB_PASSWORD@@'
+                    Properties:
+                        user:
+                            Value: genesis_usdom_lookup_app
+        'usdom-GENDOM_PERM_01_GENESIS_LAS_S1-genesis_usdom_recvendor_app':
+            Target: 'usdom-alpha'
+            JdbcResource:
+                JDBCConnectionPoolParams:
+                    MaxCapacity: 22
+                    TestTableName: SQL SELECT 1 FROM DUAL
+                    TestConnectionsOnReserve: true
+                JDBCDataSourceParams:
+                    JNDIName: 'javax.jdbc.VReceiveDataSource'
+                    GlobalTransactionsProtocol: EmulateTwoPhaseCommit
+                JDBCDriverParams:
+                    DriverName: oracle.jdbc.OracleDriver
+                    URL: '@@PROP:DB_URL@@'
+                    PasswordEncrypted: '@@PROP:DB_PASSWORD@@'
+                    Properties:
+                        user:
+                            Value: genesis_usdom_recvendor_app
+        'usdom-GENDOM_PERM_01_GENESIS_LAS_S1-genesis_usdom_resize_app':
+            Target: 'usdom-bravo'
+            JdbcResource:
+                JDBCConnectionPoolParams:
+                    MaxCapacity: 22
+                    TestTableName: SQL SELECT 1 FROM DUAL
+                    TestConnectionsOnReserve: true
+                JDBCDataSourceParams:
+                    JNDIName: 'javax.jdbc.USDomResizeDataSource'
+                    GlobalTransactionsProtocol: EmulateTwoPhaseCommit
+                JDBCDriverParams:
+                    DriverName: oracle.jdbc.OracleDriver
+                    URL: '@@PROP:DB_URL@@'
+                    PasswordEncrypted: '@@PROP:DB_PASSWORD@@'
+                    Properties:
+                        user:
+                            Value: genesis_usdom_resize_app
+        'usdom-GENDOM_PERM_01_GENESIS_LAS_S1-genesis_usdom_soe_app':
+            Target: 'usdom-bravo'
+            JdbcResource:
+                JDBCConnectionPoolParams:
+                    MaxCapacity: 22
+                    TestTableName: SQL SELECT 1 FROM DUAL
+                    TestConnectionsOnReserve: true
+                JDBCDataSourceParams:
+                    JNDIName: 'javax.jdbc.USSoeDataSource'
+                    GlobalTransactionsProtocol: EmulateTwoPhaseCommit
+                JDBCDriverParams:
+                    DriverName: oracle.jdbc.OracleDriver
+                    URL: '@@PROP:DB_URL@@'
+                    PasswordEncrypted: '@@PROP:DB_PASSWORD@@'
+                    Properties:
+                        user:
+                            Value: genesis_usdom_soe_app
+        'usdom-GENDOM_PERM_01_GENESIS_LAS_S1-genesis_usdom_updatedb_app':
+            Target: 'usdom-bravo'
+            JdbcResource:
+                JDBCConnectionPoolParams:
+                    MaxCapacity: 22
+                    TestTableName: SQL SELECT 1 FROM DUAL
+                    TestConnectionsOnReserve: true
+                JDBCDataSourceParams:
+                    JNDIName: 'javax.jdbc.UpdateDBDataSource'
+                    GlobalTransactionsProtocol: EmulateTwoPhaseCommit
+                JDBCDriverParams:
+                    DriverName: oracle.jdbc.OracleDriver
+                    URL: '@@PROP:DB_URL@@'
+                    PasswordEncrypted: '@@PROP:DB_PASSWORD@@'
+                    Properties:
+                        user:
+                            Value: genesis_usdom_updatedb_app
+        'usdom-GENDOM_PERM_01_GENESIS_LAS_S1-genesis_usdom_xfertovend_app':
+            Target: 'usdom-alpha'
+            JdbcResource:
+                JDBCConnectionPoolParams:
+                    MaxCapacity: 22
+                    TestTableName: SQL SELECT 1 FROM DUAL
+                    TestConnectionsOnReserve: true
+                JDBCDataSourceParams:
+                    JNDIName: 'javax.jdbc.TransferToVendorDataSource'
+                    GlobalTransactionsProtocol: EmulateTwoPhaseCommit
+                JDBCDriverParams:
+                    DriverName: oracle.jdbc.OracleDriver
+                    URL: '@@PROP:DB_URL@@'
+                    PasswordEncrypted: '@@PROP:DB_PASSWORD@@'
+                    Properties:
+                        user:
+                            Value: genesis_usdom_xfertovend_app
+        'usdom-GENDOM_PERM_01_GENESIS_LAS_S1-genesis_wl01_app':
+            Target: 'usdom-alpha'
+            JdbcResource:
+                JDBCConnectionPoolParams:
+                    MaxCapacity: 22
+                    TestTableName: SQL SELECT 1 FROM DUAL
+                    TestConnectionsOnReserve: true
+                JDBCDataSourceParams:
+                    JNDIName: 'javax.jdbc.genccobagent'
+                    GlobalTransactionsProtocol: EmulateTwoPhaseCommit
+                JDBCDriverParams:
+                    DriverName: oracle.jdbc.OracleDriver
+                    URL: '@@PROP:DB_URL@@'
+                    PasswordEncrypted: '@@PROP:DB_PASSWORD@@'
+                    Properties:
+                        user:
+                            Value: genesis_wl01_app
+        'usdom-GENDOM_PERM_01_GENESIS_LAS_S1-genesis_workflow_monitor_app':
+            Target: 'usdom-alpha'
+            JdbcResource:
+                JDBCConnectionPoolParams:
+                    MaxCapacity: 22
+                    TestTableName: SQL SELECT 1 FROM DUAL
+                    TestConnectionsOnReserve: true
+                JDBCDataSourceParams:
+                    JNDIName: 'javax.jdbc.UWFMDataSource'
+                    GlobalTransactionsProtocol: EmulateTwoPhaseCommit
+                JDBCDriverParams:
+                    DriverName: oracle.jdbc.OracleDriver
+                    URL: '@@PROP:DB_URL@@'
+                    PasswordEncrypted: '@@PROP:DB_PASSWORD@@'
+                    Properties:
+                        user:
+                            Value: genesis_workflow_monitor_app
+        'usdom-GENDOM_PERM_01_GENESIS_LAS_S1-genesis_icdmi_app':
+            Target: 'usdom-bravo'
+            JdbcResource:
+                JDBCConnectionPoolParams:
+                    MaxCapacity: 22
+                    TestTableName: SQL SELECT 1 FROM DUAL
+                    TestConnectionsOnReserve: true
+                JDBCDataSourceParams:
+                    JNDIName: 'javax.jdbc.DmiDataSource'
+                    GlobalTransactionsProtocol: EmulateTwoPhaseCommit
+                JDBCDriverParams:
+                    DriverName: oracle.jdbc.OracleDriver
+                    URL: '@@PROP:DB_URL@@'
+                    PasswordEncrypted: '@@PROP:DB_PASSWORD@@'
+                    Properties:
+                        user:
+                            Value: genesis_icdmi_app
+        'usrecog-GENDOM_PERM_01_GENESIS_LAS_S1-genesis_recog_app':
+            Target: 'usrecog'
+            JdbcResource:
+                JDBCConnectionPoolParams:
+                    MaxCapacity: 22
+                    TestTableName: SQL SELECT 1 FROM DUAL
+                    TestConnectionsOnReserve: true
+                JDBCDataSourceParams:
+                    JNDIName: 'javax.jdbc.RecogParserDataSource, javax.jdbc.RecognitionDataSource, javax.jdbc.genrecogagent'
+                    GlobalTransactionsProtocol: EmulateTwoPhaseCommit
+                JDBCDriverParams:
+                    DriverName: oracle.jdbc.OracleDriver
+                    URL: '@@PROP:DB_URL@@'
+                    PasswordEncrypted: '@@PROP:DB_PASSWORD@@'
+                    Properties:
+                        user:
+                            Value: genesis_recog_app
+               
+#appDeployments:
+ #   Library:
+  #      'frameworklib':
+   #         SourcePath: '/opt/fedex/devframework/7.1.4/weblogic/frameworklib.war'
+    #        ModuleType: war
+     #       Target: 'usdom-bravo,usdom-alpha'
+**************************************************************************************************************************************
+wlst 
+**************************************************************************************************************************************
+
+domain-wlst-create.sh#! /bin/sh
+
+# Pre-create domain
+
+mkdir -p ${DOMAIN_HOME}
+if [ ${?} -ne 0 ]; then exit 1; fi
+
+mkdir -p ${DOMAIN_DEPLOY}
+if [ ${?} -ne 0 ]; then exit 1; fi
+
+cp -R ${DOMAIN_STAGE}/ext/* ${DOMAIN_DEPLOY}
+if [ ${?} -ne 0 ]; then exit 1; fi
+
+ln -s ${JAVA_HOME} ${JRE_LINK}
+if [ ${?} -ne 0 ]; then exit 1; fi
+
+ln -s ${ORACLE_HOME} ${WLS_LINK}
+if [ ${?} -ne 0 ]; then exit 1; fi
+
+# Create domain
+
+mystatus=0
+pushd ${DOMAIN_STAGE}
+./config.sh ${DOMAIN_ENVIRONMENT}
+if [ ${?} -ne 0 ]; then mystatus=1; fi
+popd
+if [ ${mystatus} -ne 0 ]; then exit 1; fi
+
+# Post-create domain
+
+sed -i -e 's/\${PROXY_SETTINGS}/\${usgendom_PROPERTIES} \${PROXY_SETTINGS}/g' ${DOMAIN_HOME}/bin/startWebLogic.sh
+if [ ${?} -ne 0 ]; then exit 1; fi
+
+mystatus=0
+pushd ${DOMAIN_PARENT}
+ln -s ${JAVA_HOME} jre
+if [ ${?} -ne 0 ]; then mystatus=1; fi
+popd
+if [ ${mystatus} -ne 0 ]; then exit 1; fi
+
+# Exit gracefully
+
+exit 0
+
+***********************************************************************************************************************************
+domain-wlst-env.sh
+export JAVA_HOME=@@JAVA_HOME@@
+export ORACLE_HOME=@@ORACLE_HOME@@
+export WLVM_HOME=@@WLVM_HOME@@
+export DOMAIN_PARENT=@@DOMAIN_PARENT@@
+export DOMAIN_HOME=@@DOMAIN_HOME@@
+export DOMAIN_STAGE=@@DOMAIN_STAGE@@
+export DOMAIN_DEPLOY=@@DOMAIN_DEPLOY@@
+export DOMAIN_ENVIRONMENT=@@DOMAIN_ENVIRONMENT@@
+export JRE_LINK=@@JRE_LINK@@
+export WLS_LINK=@@WLS_LINK@@
+
+*********************************************************************************************************************************
+config.jms
+from java.io import File
+from java.io import FileOutputStream
+from java import io
+from java.lang import Exception
+from java.lang import Throwable
+import os.path
+
+import sys
+if len(sys.argv) < 2:
+    print("Please provide the environment name as an argument")
+    exit()
+
+env_name = sys.argv[1]
+
+if env_name == "L3":
+    hostname = "u1062546.test.cloud.fedex.com"
+    env = "L3"
+elif env_name == "L3DR":
+    hostname = "u1059926.test.cloud.fedex.com"
+    env = "L3"
+elif env_name == "L2":
+    hostname = "u1051550.test.cloud.fedex.com"
+    env = "L2"
+elif env_name == "L4":
+    hostname = "u1052262.test.cloud.fedex.com"
+    env = "L4"
+else:
+    print("Invalid environment name")
+    exit()
+#loadProperties("./config-jms.py.properties")
+
+#connect('weblogic','WebLog1c$',url='t3://u1062546.test.cloud.fedex.com:9901', adminServerName='genadmin')
+connect('weblogic','WebLog1c$',url='t3s://' + hostname + ':9902', adminServerName='genadmin')
+
+edit()
+startEdit()
+cd('/')
+cd('JMSSystemResources')
+ls()
+#ls('usdom-Ede JmsModule')
+if 'usdom-Ede JmsModule' in ls():
+    print('JMS System Resource already exists')
+else:
+    print('JMS System Resource does not exists and will be created...')
+    cmo.createJMSSystemResource('usdom-Ede JmsModule')
+    cd('/JMSSystemResources/usdom-Ede JmsModule')
+    set('Targets',jarray.array([ObjectName('com.bea:Name=usdom-bravo,Type=Cluster')], ObjectName))
+
+    cd('/JMSSystemResources/usdom-Ede JmsModule/JMSResource/usdom-Ede JmsModule')
+    cmo.createForeignServer('Ede Tibco Foreign JMSServer')
+    cd('/JMSSystemResources/usdom-Ede JmsModule/JMSResource/usdom-Ede JmsModule/ForeignServers/Ede Tibco Foreign JMSServer')
+    cmo.setDefaultTargetingEnabled(true)
+
+    cmo.setConnectionURL('ldap://apptstldap.corp.fedex.com:389/ou=messaging,dc=corp,dc=fedex,dc=com')
+    cmo.setInitialContextFactory('com.fedex.mi.decorator.jms.FedexTibcoInitialContext')
+    #cmo.unSet('JNDIPropertiesCredentialEncrypted')
+    
+    cmo.createForeignDestination('Remote Ede Queue')
+    cd('/JMSSystemResources/usdom-Ede JmsModule/JMSResource/usdom-Ede JmsModule/ForeignServers/Ede Tibco Foreign JMSServer/ForeignDestinations/Remote Ede Queue')
+    cmo.setLocalJNDIName('javax.jms.EdeInitQueue')
+    cmo.setRemoteJNDIName('fxClientDestinationUID=D.FXShip.FX.RawDocCap')
+    
+    cd('/JMSSystemResources/usdom-Ede JmsModule/JMSResource/usdom-Ede JmsModule/ForeignServers/Ede Tibco Foreign JMSServer')
+    cmo.createForeignConnectionFactory('Tibco Foreign JMS Connection Factory')
+    
+    cd('/JMSSystemResources/usdom-Ede JmsModule/JMSResource/usdom-Ede JmsModule/ForeignServers/Ede Tibco Foreign JMSServer/ForeignConnectionFactories/Tibco Foreign JMS Connection Factory')
+    cmo.setLocalJNDIName('javax.jms.EDETibcoConnectionFactory')
+    cmo.setRemoteJNDIName('fxClientUID=S.7353.PUB.FX.RAWDOCCAP.LAS.TCF.' + env + '.01')
+    
+    cmo.setConnectionHealthChecking('enabled')
+    cmo.setUsername('GENUSDOM-7353')
+    setEncrypted('Password', 'Password_1684935881916', '/opt/fedex/genesis/gendom/current/usgendom/JMS_Config', '/opt/fedex/genesis/gendom/current/usgendom/JMS_Secret')
+
+save()
+activate(block="true")
+
+*******************************************************************************************************************************
+JMS_Config
+#WebLogic User Configuration File; 2
+#Wed May 24 13:44:41 GMT 2023
+Password_1684935881916.username=encrypted username
+Password_1684935881916.password=encrypted password
+***************************************************************************************************************************************
+can create JMS_scerte file for jms password
+***************************************************************************************************************************************

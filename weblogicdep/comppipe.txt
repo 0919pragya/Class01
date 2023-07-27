@@ -1,0 +1,528 @@
+
+library 'reference-pipeline'
+library 'AppServiceAccount'
+library 'CICD-FOSS-V2'
+
+pipeline {
+  agent any
+  
+  options {
+        timeout(time: 6, unit: 'HOURS')
+        disableConcurrentBuilds()
+        buildDiscarder(logRotator(numToKeepStr: '20'))
+  }
+ 
+ tools {
+    jdk 'JAVA_8'
+    maven 'Maven 3.3.3'
+  } //End of tools
+  
+  parameters {
+    choice(name: 'ENVIRONMENT', choices: 'None\nL2\nL3\nL3DR\nL4\nPROD\nPRODDR', description: 'Target Environment')
+	choice(name: 'BRANCH_NAME', choices: 'comdor_dev\ncondor_main', description: 'select BRANCH NAME')
+    choice(name: 'ACTION', choices: 'None\ndeploy component\nredeploy component\nlog4j\ncopyconfigfiles', description: 'Target Action')
+  } //End of params
+  
+  environment {
+    EAI_NUMBER = "7353"
+    EAI_NAME = "usgendom"
+    APP_NAME = "usgendom"
+    EAI_FOLDER_NAME = "  "
+
+   GIT_BRANCH = "${env.BRANCH_NAME}"
+	
+    //
+    // CloudOps Provisioning Config
+    //
+    OKTA_CREDS=credentials('s3_app7353')
+    S3_CREDS=credentials('s3_app7353')
+    MF_BROKER="mf-broker.app.paas.fedex.com"
+    S3_ENDPOINT="https://s3-cf.ecs.ute.fedex.com"
+	ISSUER="https://purpleid.okta.com/oauth2/aus9s4vjt7GKaQnPf357/v1/token?grant_type=client_credentials&response_type=token&scope=Custom_Scope"
+    PROXY="internet.proxy.fedex.com:3128"
+    WLVM_TF_WORKSPACE="${params.ENVIRONMENT}"
+    WLVM_TF_WORKSPACE_JMS="${params.ENVIRONMENT}"
+    SSH_OPTIONS='-oStrictHostKeyChecking=no -oBatchMode=yes -oLogLevel=error -oUserKnownHostsFile=/dev/null'
+    APP_VERSION = "9.5"
+    APP_GROUP = ""
+    NEXUS_REPO = ""
+    NEXUS_VERSION = ""
+    RELEASE_FLAG = false     
+  } //End of Environment variables
+  
+  stages {
+   stage('checkout') {
+            steps{
+	            checkout changelog: false, poll: false, scm: [$class: 'GitSCM', branches: [[name: '$BRANCH_NAME']], extensions: [], userRemoteConfigs: [[credentialsId: 'genusdom7353', url: 'git@github.com:FedEx/eai-28-dmi.git']]]
+		   }
+        } //End of checkout Stage
+        
+   stage('Environment') {
+            steps {
+                script {
+                    switch(ENVIRONMENT) {
+					  case 'L2' :	
+							env.WLVM_TARGET_SERVERS='u1051550.test.cloud.fedex.com,u1051291.test.cloud.fedex.com,u1051292.test.cloud.fedex.com,u1051661.test.cloud.fedex.com'
+                            env.WLVM_ADMIN_HOST='u1051550.test.cloud.fedex.com'
+                            env.WLVM_CORE_SERVERS='u1051550.test.cloud.fedex.com,u1051291.test.cloud.fedex.com,u1051292.test.cloud.fedex.com'
+                            env.WLVM_RECOG_SERVERS='u1051661.test.cloud.fedex.com'
+
+                            env.CORE_CLOUDOPS_HOSTS='u1051550.test.cloud.fedex.com,u1051291.test.cloud.fedex.com,u1051292.test.cloud.fedex.com'
+                            env.RECOG_CLOUDOPS_HOSTS='u1051661.test.cloud.fedex.com'
+                          
+                            env.WLVM_TF_WORKSPACE='L3'
+                            env.WLVM_DOMAIN_USERNAME='weblogic'    
+			                env.WLVM_DOMAIN_PASSWORD='WebLog1c$'
+                            env.WLVM_SERVER_MANAGED_PORT=7261
+                            env.WLVM_SERVER_ADMIN_PORT=9902
+                            env.WLVM_TARGET='L3'
+                            env.WLVM_SERVER_APPD=false
+							env.WLVM_SSH_AGENT='hermes-keyper_app7353_devtest_gendom'
+                            env.WLVM_SSH_AGENT_GENRECOG='genrecog_ssh_key'
+                         
+                            break
+                        case 'L3' :
+                            env.WLVM_TARGET_SERVERS='u1062546.test.cloud.fedex.com,u1064310.test.cloud.fedex.com,u1064309.test.cloud.fedex.com,u1064311.test.cloud.fedex.com,u1064312.test.cloud.fedex.com,u1064637.test.cloud.fedex.com;u1064638.test.cloud.fedex.com'
+                            env.WLVM_ADMIN_HOST='u1062546.test.cloud.fedex.com'
+                            env.WLVM_CORE_SERVERS='u1062546.test.cloud.fedex.com,u1064310.test.cloud.fedex.com,u1064309.test.cloud.fedex.com,u1064311.test.cloud.fedex.com,u1064312.test.cloud.fedex.com'
+                            env.WLVM_RECOG_SERVERS='u1064637.test.cloud.fedex.com,u1064638.test.cloud.fedex.com'
+                            
+                            env.CORE_CLOUDOPS_HOSTS='u1062546.test.cloud.fedex.com,u1064310.test.cloud.fedex.com,u1064309.test.cloud.fedex.com,u1064311.test.cloud.fedex.com,u1064312.test.cloud.fedex.com'
+                            env.RECOG_CLOUDOPS_HOSTS='u1064637.test.cloud.fedex.com,u1064638.test.cloud.fedex.com'
+                           
+                            env.WLVM_TF_WORKSPACE='L3'
+                            env.WLVM_DOMAIN_USERNAME='weblogic'    
+			                env.WLVM_DOMAIN_PASSWORD='WebLog1c$'
+                            env.WLVM_SERVER_MANAGED_PORT=7261
+                            env.WLVM_SERVER_ADMIN_PORT=9902
+                            env.WLVM_TARGET='L3'
+                            env.WLVM_SERVER_APPD=false
+							env.WLVM_SSH_AGENT='hermes-keyper_app7353_devtest_gendom'
+                            env.WLVM_SSH_AGENT_GENRECOG='genrecog_ssh_key'
+                          
+                        break
+						case 'L3DR' :
+                            env.WLVM_TARGET_SERVERS='u1059926.test.cloud.fedex.com,u1060169.test.cloud.fedex.com,u1060168.test.cloud.fedex.com,u1060414.test.cloud.fedex.com,u1059987.test.cloud.fedex.com,u1060171.test.cloud.fedex.com,u1059991.test.cloud.fedex.com'
+                            env.WLVM_ADMIN_HOST='u1059926.test.cloud.fedex.com'
+                            env.WLVM_CORE_SERVERS='u1059926.test.cloud.fedex.com,u1060169.test.cloud.fedex.com,u1060168.test.cloud.fedex.com,u1060414.test.cloud.fedex.com,u1059987.test.cloud.fedex.com'
+                            env.WLVM_RECOG_SERVERS='u1060171.test.cloud.fedex.com,u1059991.test.cloud.fedex.com'
+                        
+                            env.CORE_CLOUDOPS_HOSTS='u1059926.test.cloud.fedex.com,u1060169.test.cloud.fedex.com,u1060168.test.cloud.fedex.com,u1060414.test.cloud.fedex.com,u1059987.test.cloud.fedex.com'
+                            env.RECOG_CLOUDOPS_HOSTS='u1060171.test.cloud.fedex.com,u1059991.test.cloud.fedex.com'
+                           
+                            env.WLVM_TF_WORKSPACE='L3DR'
+                            env.WLVM_DOMAIN_USERNAME='weblogic'    
+			                env.WLVM_DOMAIN_PASSWORD='WebLog1c$'                        
+                            env.WLVM_TARGET='L3DR'
+                            env.WLVM_SERVER_APPD=false
+                            env.WLVM_SERVER_ADMIN_PORT=9902
+							env.WLVM_SSH_AGENT='hermes-keyper_app7353_devtest_gendom'
+                            env.WLVM_SSH_AGENT_GENRECOG='genrecog_ssh_key'
+                           
+						
+                        break
+					case 'L4' :			
+							env.WLVM_TARGET_SERVERS='u1052262.test.cloud.fedex.com,u1061499.test.cloud.fedex.com,u1061498.test.cloud.fedex.com,u1061568.test.cloud.fedex.com'
+                            env.WLVM_ADMIN_HOST='u1051550.test.cloud.fedex.com'
+                            env.WLVM_CORE_SERVERS='u1052262.test.cloud.fedex.com,u1061499.test.cloud.fedex.com,u1061498.test.cloud.fedex.com'
+                            env.WLVM_RECOG_SERVERS='u1061568.test.cloud.fedex.com'
+                           
+                            env.CORE_CLOUDOPS_HOSTS='u1052262.test.cloud.fedex.com,u1061499.test.cloud.fedex.com,u1061498.test.cloud.fedex.com'
+                            env.RECOG_CLOUDOPS_HOSTS='u1061568.test.cloud.fedex.com'
+                           
+                            env.WLVM_TF_WORKSPACE='L4'
+                            env.WLVM_DOMAIN_USERNAME='weblogic'    
+			                env.WLVM_DOMAIN_PASSWORD='WebLog1c$'
+                            //env.WLVM_SERVER_MANAGED_PORT=7261
+                            env.WLVM_SERVER_ADMIN_PORT=9902
+                            env.WLVM_TARGET='L4'
+                            env.WLVM_SERVER_APPD=false
+							env.WLVM_SSH_AGENT='hermes-keyper_app7353_devtest_gendom'
+                            env.WLVM_SSH_AGENT_GENRECOG='genrecog_ssh_key'
+                           
+
+                            break
+                    }
+					// move common part out
+					                      
+                            env.WLVM_TARGET_JRE='/opt/fedex/genesis/java8_current'
+                            env.WLVM_TARGET_ORACLE='/opt/fedex/genesis/wl12214_current'
+                            env.WLVM_TARGET_WLS="${WLVM_TARGET_ORACLE}/wlserver"
+                            env.WLVM_TARGET_OPT='/opt/fedex/genesis'
+                            env.WLVM_CORE_OPT="${WLVM_TARGET_OPT}/gendom"
+                            env.WLVM_RECOG_OPT="${WLVM_TARGET_OPT}/genrecog"
+                            env.WLVM_TARGET_VAR='/var/fedex/genesis'
+                            env.WLVM_CORE_VAR="${WLVM_TARGET_VAR}/gendom"
+                            env.WLVM_RECOG_VAR="${WLVM_TARGET_VAR}/genrecog"
+                            env.WLVM_CORE_TMP="${WLVM_CORE_VAR}/tmp"
+                            env.WLVM_RECOG_TMP="${WLVM_RECOG_VAR}/tmp"
+                            env.WLVM_DOMAIN_NAME='usgendom'
+                            env.WLVM_CORE_DOMAIN_PARENT="${WLVM_CORE_OPT}/current"
+                            env.WLVM_CORE_DOMAIN_HOME="${WLVM_CORE_DOMAIN_PARENT}/${WLVM_DOMAIN_NAME}"
+                            env.WLVM_RECOG_DOMAIN_PARENT="${WLVM_RECOG_OPT}/current"
+                            env.WLVM_RECOG_DOMAIN_HOME="${WLVM_RECOG_DOMAIN_PARENT}/${WLVM_DOMAIN_NAME}"
+                            
+                           
+                            env.WLVM_SSH_USER='gendom'
+                            env.WLVM_SSH_USER_RECOG='genrecog'
+                           
+                            env.WLVM_CORE_SERVER_MANAGED_PREFIX='gendom'
+                            env.WLVM_RECOG_SERVER_MANAGED_PREFIX='genrecog'
+					// end of move
+                    env.WLVM_ROOT="${WORKSPACE}"
+                    env.WLVM_HOME="${WLVM_ROOT}/wlvm"
+                    env.WLVM_PACKAGE="${WLVM_HOME}/package"
+                    env.WLVM_PACKAGE_TOOL='wdt'
+                    env.WLVM_PACKAGE_SECRET_WDT='mysupersecret'
+                    env.WLVM_PACKAGE_SECRET_WLST="${WLVM_HOME}/etc/c2sSecretWlstGenDomain" 
+                    env.POM_VERSION=2243
+                    //env.WLVM_DOMAIN_PARENT="${WLVM_TARGET_OPT}/current"
+                    //env.WLVM_DOMAIN_HOME="${WLVM_DOMAIN_PARENT}/${WLVM_DOMAIN_NAME}"
+                    env.WLVM_DOMAIN_PRODUCTION=false
+                    env.WLVM_DOMAIN_TARGET='usdom-alphaCluster,usdom-bravoCluster,usrecogCluster' 
+                    env.WLVM_SERVER_ADMIN_NAME='genadmin' 
+                    env.WLVM_SERVER_LOG=true
+                    env.WLVM_APP_EAI="${EAI_NUMBER}"
+                    env.WLVM_APP_VERSION='0.0.1'
+                    env.WLVM_CONTROL_KILL=30
+
+                    println '======================= UPDATED ENVIRONMENT VARS  ======================='
+                    sh 'env | sort'
+                    println '^^^^^^^^^^^^^^^^^^^^^^^ UPDATED ENVIRONMENT VARS  ^^^^^^^^^^^^^^^^^^^^^^^'  
+                    println '======================= UPDATING DIRECTORY PERMISSIONS  ======================='
+                    sh 'chmod 775 *'
+                    println '^^^^^^^^^^^^^^^^^^^^^^^UPDATING DIRECTORY PERMISSIONS  ^^^^^^^^^^^^^^^^^^^^^^^'
+                }
+            }
+        }
+	 stage('Read-POM-Version') {
+        when {
+            anyOf {
+                environment name: 'ACTION', value: 'deploy component'
+                environment name: 'ACTION', value: 'redeploy component'
+            }
+        }
+        steps {
+            script{
+                def pom_version = readMavenPom file: 'pom.xml'
+                println "POM Version is: ${pom_version}"
+                APP_VERSION = pom_version.version
+            }
+        }
+    }
+	stage('Copy_Config_Files') {
+    when {
+         anyOf {
+            environment name: 'ACTION', value: 'deploy component'
+            environment name: 'ACTION', value: 'copyconfigfiles'
+            environment name: 'ACTION', value: 'redeploy component'
+            }
+    }
+        steps {
+
+        config(_wlvmGlobalConfig(), "${WLVM_SSH_AGENT}", "${WLVM_SSH_USER}", "${SSH_OPTIONS}", "${CORE_CLOUDOPS_HOSTS}")
+     }
+}
+	stage('log_files') {
+    when {
+         anyOf {
+            environment name: 'ACTION', value: 'deploy component'
+            environment name: 'ACTION', value: 'log4j'
+            environment name: 'ACTION', value: 'redeploy component'
+            }
+    }
+        steps {
+
+        log4j(_wlvmGlobalConfig(), "${WLVM_SSH_AGENT}", "${WLVM_SSH_USER}", "${SSH_OPTIONS}", "${CORE_CLOUDOPS_HOSTS}")
+     }
+}
+        stage('Build') {
+		when {
+			anyOf {
+				environment name: 'ACTION', value: 'deploy component'
+				environment name: 'ACTION', value: 'redeploy component'
+			}
+		}
+		steps {
+                   echo "-----executing build.sh-------"
+                   dir("${env.WORKSPACE}") {
+				     sh "pwd"
+            		  println "Building source from branch ${GIT_BRANCH}"
+                     sh "rm -rf wlvm@tmp"
+            	     sh "ls -l"                                        
+                 sh "mvn clean install -Dmaven.test.skip=true"
+                  sh "ls -l" 
+	            }
+	        }
+		  }
+	stage('Dmideploy'){
+          when {
+              anyOf {
+                  environment name: 'ACTION', value: 'deploy component'
+              }
+          }//End of when condition
+          steps{
+              wlvmdeploydmi(_wlvmGlobalConfig())
+          }//End of steps
+        } //End of stage DMi
+	
+	stage('Dmiredeploy'){
+          when {
+              anyOf {
+                  environment name: 'ACTION', value: 'redeploy component'
+              }
+          }//End of when condition
+          steps{
+              wlvmdeploydmi(_wlvmGlobalConfig())
+          }//End of steps
+        } //End of stage DMi
+  
+    
+
+      
+  }
+}
+ def _wlvmGlobalConfig() {
+    println """============ _wlvmGlobalConfig ============
+    ACTION: ${ACTION}
+    WLVM_HOME: ${WLVM_HOME}
+    WLVM_PACKAGE: ${WLVM_PACKAGE}
+    WLVM_ADMIN_HOST: ${WLVM_ADMIN_HOST}
+    WLVM_CORE_SERVERS: ${WLVM_CORE_SERVERS}
+    WLVM_RECOG_SERVERS: ${WLVM_RECOG_SERVERS}
+    WLVM_TARGET_OPT: ${WLVM_TARGET_OPT}
+    WLVM_CORE_OPT: ${WLVM_CORE_OPT}
+    WLVM_RECOG_OPT: ${WLVM_RECOG_OPT}
+    WLVM_TARGET_VAR: ${WLVM_TARGET_VAR}
+    WLVM_CORE_VAR: ${WLVM_CORE_VAR}
+    WLVM_RECOG_VAR: ${WLVM_RECOG_VAR}
+    WLVM_CORE_TMP: ${WLVM_CORE_TMP}
+    WLVM_RECOG_TMP: ${WLVM_RECOG_TMP}
+    WLVM_CORE_DOMAIN_PARENT: ${WLVM_CORE_DOMAIN_PARENT}
+    WLVM_RECOG_DOMAIN_PARENT: ${WLVM_RECOG_DOMAIN_PARENT}
+    WLVM_CORE_DOMAIN_HOME: ${WLVM_CORE_DOMAIN_HOME}
+    WLVM_RECOG_DOMAIN_HOME: ${WLVM_RECOG_DOMAIN_HOME}
+    WLVM_SERVER_ADMIN_NAME: ${WLVM_SERVER_ADMIN_NAME}
+    WLVM_CONTROL_KILL: ${WLVM_CONTROL_KILL}
+    WLVM_SSH_AGENT: ${WLVM_SSH_AGENT}
+    WLVM_SSH_AGENT_GENRECOG:${WLVM_SSH_AGENT_GENRECOG}													   
+    SSH_OPTIONS: ${SSH_OPTIONS}
+    WLVM_SSH_USER: ${WLVM_SSH_USER}
+    WLVM_SSH_USER_RECOG: ${WLVM_SSH_USER_RECOG}
+    WLVM_CORE_SERVER_MANAGED_PREFIX: ${WLVM_CORE_SERVER_MANAGED_PREFIX}
+    WLVM_RECOG_SERVER_MANAGED_PREFIX: ${WLVM_RECOG_SERVER_MANAGED_PREFIX}
+    APP_VERSION: ${APP_VERSION}
+"""
+
+    return [
+    cmd:[
+      parameter:"${ACTION}"
+    ],
+    source:[
+      home:"${WLVM_HOME}",
+      tmp:"${WLVM_PACKAGE}"
+    ],
+    core_target:[
+        hosts:"${WLVM_CORE_SERVERS}",
+        opt:"${WLVM_CORE_OPT}",
+        var:"${WLVM_CORE_VAR}",
+        tmp:"${WLVM_CORE_TMP}",
+		version:"${APP_VERSION}"
+		],
+    recog_target:[
+        hosts:"${WLVM_RECOG_SERVERS}",
+        opt:"${WLVM_RECOG_OPT}",
+        var:"${WLVM_RECOG_VAR}",
+        tmp:"${WLVM_RECOG_TMP}"
+    ],
+    domain:[
+      core_home:"${WLVM_CORE_DOMAIN_HOME}",
+      recog_home:"${WLVM_RECOG_DOMAIN_HOME}"
+    ],
+    admin:[
+      host: "${WLVM_ADMIN_HOST}",
+      name:"${WLVM_SERVER_ADMIN_NAME}",
+      opt:"${WLVM_CORE_OPT}",
+      var:"${WLVM_CORE_VAR}",
+      tmp:"${WLVM_CORE_TMP}"
+    ],
+    managed:[
+      prefix1:"${WLVM_CORE_SERVER_MANAGED_PREFIX}",
+      prefix2:"${WLVM_RECOG_SERVER_MANAGED_PREFIX}"
+    ],
+    control:[
+      kill:"${WLVM_CONTROL_KILL}"
+    ],
+    ssh:[
+      agent:"${WLVM_SSH_AGENT}",
+      recog_agent:"${WLVM_SSH_AGENT_GENRECOG}",
+      options:"${SSH_OPTIONS}",
+      user1:"${WLVM_SSH_USER}",
+      user2:"${WLVM_SSH_USER_RECOG}"
+    ]
+  ]
+}
+   
+	def wlvmdeploydmi(Map config) {
+  String[] gendom_hosts=config.core_target.hosts.split(',')
+  for (host in gendom_hosts) {
+    config.action=[host:host]
+        _wlvmdeploydmi(config)
+    }
+    config.remove('action')
+} //End of wlvmdeploydmi()
+
+def _wlvmdeploydmi(Map config) {
+  sshagent([config.ssh.agent]){
+
+	    sh(_wlvmCoreHostScp(config, "${WORKSPACE}/dist/DMI-${config.core_target.version}.war", "/opt/fedex/genesis/gendom/current/bin/", false))
+
+        //Redeploy app so that war changes gets into effect
+        String[] gendom_hosts=config.core_target.hosts.split(',')
+        String adminUrl="https://${gendom_hosts[0]}:${WLVM_SERVER_ADMIN_PORT}"
+		String cmd="/opt/fedex/genesis/java8_current/bin/java -cp \".:/opt/fedex/genesis/wl12214_current/wlserver/server/lib/weblogic.jar\" weblogic.Deployer -adminurl ${adminUrl} -user ${WLVM_DOMAIN_USERNAME} -password ${WLVM_DOMAIN_PASSWORD} -deploy -targets usdom-bravo -source  /opt/fedex/genesis/gendom/current/bin/DMI-${config.core_target.version}.war -name usdom-bravo-DMI_USDOM"
+
+
+        sh(_wlvmCoreHostSsh(config, "'cd ${config.domain.core_home} && ${cmd}'"))
+
+    } 
+}//End of _wlvmdeploydmi()
+
+def wlvmredeploydmi(Map config) {
+  String[] gendom_hosts=config.core_target.hosts.split(',')
+  for (host in gendom_hosts) {
+    config.action=[host:host]
+        _wlvmredeploydmi(config)
+    }
+    config.remove('action')
+} //End of wlvmredeploydmi()
+
+def _wlvmredeploydmi(Map config) {
+  sshagent([config.ssh.agent]){
+
+	    sh(_wlvmCoreHostScp(config, "${WORKSPACE}/dist/DMI-${config.core_target.version}.war", "/opt/fedex/genesis/gendom/current/bin/", false))
+
+        //Redeploy app so that war changes gets into effect
+        String[] gendom_hosts=config.core_target.hosts.split(',')
+        String adminUrl="https://${gendom_hosts[0]}:${WLVM_SERVER_ADMIN_PORT}"
+		String cmd="/opt/fedex/genesis/java8_current/bin/java -cp \".:/opt/fedex/genesis/wl12214_current/wlserver/server/lib/weblogic.jar\" weblogic.Deployer -adminurl ${adminUrl} -user ${WLVM_DOMAIN_USERNAME} -password ${WLVM_DOMAIN_PASSWORD} -redeploy -targets usdom-bravo -source  /opt/fedex/genesis/gendom/current/bin/DMI-${config.core_target.version}.war -name usdom-bravo-DMI_USDOM"
+
+
+        sh(_wlvmCoreHostSsh(config, "'cd ${config.domain.core_home} && ${cmd}'"))
+
+    } 
+}//End of _wlvmredeploydmi()
+
+ def _wlvmCoreHostSsh(Map config, String cmd) {
+    return "ssh ${config.ssh.options} ${config.ssh.user1}@${config.action.host} ${cmd}"
+} 
+  def _wlvmCoreHostScp(Map config, String from, String to, boolean isDownload) {
+    String result
+    if (isDownload) {
+      result="scp ${config.ssh.options} ${config.ssh.user1}@${config.action.host}:${from} ${to}"
+    } else {
+      result="scp ${config.ssh.options} ${from} ${config.ssh.user1}@${config.action.host}:${to}"
+    }
+    return result
+  } 
+  
+
+/*def copyConfigFiles(Map config, sshAgent, sshUser, sshOptions, cloudOpsHosts){
+sshagent([sshAgent]) {
+        cloudOpsHosts.split(',').each { cloudOpsHost ->
+        sh """#!/bin/bash
+        cd ${WORKSPACE}/configuration/gendom-7353/cfg/3.0.1/
+        scp ${sshOptions} -r ${WORKSPACE}/configuration/gendom-7353/awb_templates/  ${sshUser}@${cloudOpsHost}:/opt/fedex/genesis/gendom/
+        scp ${sshOptions} -r ${WORKSPACE}/configuration/gendom-7353/cfg/3.0.1/DmiConfiguration.xml ${sshUser}@${cloudOpsHost}:/opt/fedex/genesis/gendom/current/cfg/
+        scp ${sshOptions} -r ${WORKSPACE}/configuration/gendom-7353/log4j/3.0.0/DmiLog4j.xml ${sshUser}@${cloudOpsHost}:/opt/fedex/genesis/gendom/current/cfg/
+		
+        """
+         }
+     }
+}*/
+def config(Map config, sshAgent, sshUser, sshOptions, cloudOpsHosts){
+sshagent([sshAgent]) {
+        cloudOpsHosts.split(',').each { cloudOpsHost ->
+         sh """#!/bin/bash
+        if [ ${ENVIRONMENT} == L2 ]
+        then
+        cd ${WORKSPACE}/configuration/gendom-7353/cfg/
+        scp ${sshOptions} -r ${WORKSPACE}/configuration/gendom-7353/awb_templates/  ${sshUser}@${cloudOpsHost}:/opt/fedex/genesis/gendom/
+        scp ${sshOptions} -r ${WORKSPACE}/configuration/gendom-7353/cfg/2.0.0/DmiConfiguration.xml ${sshUser}@${cloudOpsHost}:/opt/fedex/genesis/gendom/current/cfg/
+        scp ${sshOptions} -r ${WORKSPACE}/configuration/gendom-7353/cfg/3.0.1/DMI.profile ${sshUser}@${cloudOpsHost}:/opt/fedex/genesis/gendom/current/cfg/
+		ssh ${sshOptions} ${sshUser}@${cloudOpsHost} 'cd /opt/fedex/genesis/gendom/current/cfg/ && chmod 600 *.profile'
+        elif [ ${ENVIRONMENT} == L3 ]
+        then
+        cd ${WORKSPACE}/configuration/gendom-7353/cfg/
+        scp ${sshOptions} -r ${WORKSPACE}/configuration/gendom-7353/awb_templates/  ${sshUser}@${cloudOpsHost}:/opt/fedex/genesis/gendom/
+        scp ${sshOptions} -r ${WORKSPACE}/configuration/gendom-7353/cfg/3.0.1/DmiConfiguration.xml ${sshUser}@${cloudOpsHost}:/opt/fedex/genesis/gendom/current/cfg/
+        scp ${sshOptions} -r ${WORKSPACE}/configuration/gendom-7353/cfg/3.0.1/DMI.profile ${sshUser}@${cloudOpsHost}:/opt/fedex/genesis/gendom/current/cfg/
+		ssh ${sshOptions} ${sshUser}@${cloudOpsHost} 'cd /opt/fedex/genesis/gendom/current/cfg/ && chmod 600 *.profile'
+		elif [ ${ENVIRONMENT} == L3DR ]
+        then
+        cd ${WORKSPACE}/configuration/gendom-7353/cfg/
+        scp ${sshOptions} -r ${WORKSPACE}/configuration/gendom-7353/awb_templates/  ${sshUser}@${cloudOpsHost}:/opt/fedex/genesis/gendom/
+        scp ${sshOptions} -r ${WORKSPACE}/configuration/gendom-7353/cfg/3.0.1/DmiConfiguration.xml ${sshUser}@${cloudOpsHost}:/opt/fedex/genesis/gendom/current/cfg/
+        scp ${sshOptions} -r ${WORKSPACE}/configuration/gendom-7353/cfg/3.0.1/DMI.profile ${sshUser}@${cloudOpsHost}:/opt/fedex/genesis/gendom/current/cfg/
+		ssh ${sshOptions} ${sshUser}@${cloudOpsHost} 'cd /opt/fedex/genesis/gendom/current/cfg/ && chmod 600 *.profile'
+		elif [ ${ENVIRONMENT} == PROD ]
+        then
+        cd ${WORKSPACE}/configuration/gendom-7353/cfg/
+        scp ${sshOptions} -r ${WORKSPACE}/configuration/gendom-7353/awb_templates/  ${sshUser}@${cloudOpsHost}:/opt/fedex/genesis/gendom/
+        scp ${sshOptions} -r ${WORKSPACE}/configuration/gendom-7353/cfg/7.0.0/DmiConfiguration.xml ${sshUser}@${cloudOpsHost}:/opt/fedex/genesis/gendom/current/cfg/
+        scp ${sshOptions} -r ${WORKSPACE}/configuration/gendom-7353/cfg/7.0.0/DMI.profile ${sshUser}@${cloudOpsHost}:/opt/fedex/genesis/gendom/current/cfg/
+		ssh ${sshOptions} ${sshUser}@${cloudOpsHost} 'cd /opt/fedex/genesis/gendom/current/cfg/ && chmod 600 *.profile'
+        elif [ ${ENVIRONMENT} == PRODDR ]
+        then
+        cd ${WORKSPACE}/configuration/gendom-7353/cfg/
+        scp ${sshOptions} -r ${WORKSPACE}/configuration/gendom-7353/awb_templates/  ${sshUser}@${cloudOpsHost}:/opt/fedex/genesis/gendom/
+        scp ${sshOptions} -r ${WORKSPACE}/configuration/gendom-7353/cfg/7.0.0/DmiConfiguration.xml ${sshUser}@${cloudOpsHost}:/opt/fedex/genesis/gendom/current/cfg/
+        scp ${sshOptions} -r ${WORKSPACE}/configuration/gendom-7353/cfg/7.0.0/DMI.profile ${sshUser}@${cloudOpsHost}:/opt/fedex/genesis/gendom/current/cfg/
+		ssh ${sshOptions} ${sshUser}@${cloudOpsHost} 'cd /opt/fedex/genesis/gendom/current/cfg/ && chmod 600 *.profile'
+		elif [ ${ENVIRONMENT} == L4 ]
+        then
+        cd ${WORKSPACE}/configuration/gendom-7353/cfg/
+        scp ${sshOptions} -r ${WORKSPACE}/configuration/gendom-7353/awb_templates/  ${sshUser}@${cloudOpsHost}:/opt/fedex/genesis/gendom/
+        scp ${sshOptions} -r ${WORKSPACE}/configuration/gendom-7353/cfg/4.0.0/DmiConfiguration.xml ${sshUser}@${cloudOpsHost}:/opt/fedex/genesis/gendom/current/cfg/
+        scp ${sshOptions} -r ${WORKSPACE}/configuration/gendom-7353/cfg/3.0.1/DMI.profile ${sshUser}@${cloudOpsHost}:/opt/fedex/genesis/gendom/current/cfg/
+		ssh ${sshOptions} ${sshUser}@${cloudOpsHost} 'cd /opt/fedex/genesis/gendom/current/cfg/ && chmod 600 *.profile'
+
+        fi
+        """
+         }
+     }
+}
+def log4j(Map config, sshAgent, sshUser, sshOptions, cloudOpsHosts){
+sshagent([sshAgent]) {
+        cloudOpsHosts.split(',').each { cloudOpsHost ->
+         sh """#!/bin/bash
+        if [ ${ENVIRONMENT} == L2 ]
+        then
+        cd ${WORKSPACE}/configuration/gendom-7353/cfg/
+        scp ${sshOptions} -r ${WORKSPACE}/configuration/gendom-7353/log4j/2.0.0/DmiLog4j.xml ${sshUser}@${cloudOpsHost}:/opt/fedex/genesis/gendom/current/cfg/
+        elif [ ${ENVIRONMENT} == L3 ]
+        then
+        cd ${WORKSPACE}/configuration/gendom-7353/cfg/
+        scp ${sshOptions} -r ${WORKSPACE}/configuration/gendom-7353/log4j/3.0.0/DmiLog4j.xml ${sshUser}@${cloudOpsHost}:/opt/fedex/genesis/gendom/current/cfg/
+		elif [ ${ENVIRONMENT} == L3DR ]
+        then
+        cd ${WORKSPACE}/configuration/gendom-7353/cfg/
+        scp ${sshOptions} -r ${WORKSPACE}/configuration/gendom-7353/log4j/3.0.0/DmiLog4j.xml ${sshUser}@${cloudOpsHost}:/opt/fedex/genesis/gendom/current/cfg/
+		 elif [ ${ENVIRONMENT} == PROD ]
+        then
+        cd ${WORKSPACE}/configuration/gendom-7353/cfg/
+        scp ${sshOptions} -r ${WORKSPACE}/configuration/gendom-7353/log4j/7.0.0/DmiLog4j.xml ${sshUser}@${cloudOpsHost}:/opt/fedex/genesis/gendom/current/cfg/
+		 elif [ ${ENVIRONMENT} == PRODDR ]
+        then
+        cd ${WORKSPACE}/configuration/gendom-7353/cfg/
+        scp ${sshOptions} -r ${WORKSPACE}/configuration/gendom-7353/log4j/7.0.0/DmiLog4j.xml ${sshUser}@${cloudOpsHost}:/opt/fedex/genesis/gendom/current/cfg/
+		elif [ ${ENVIRONMENT} == L4 ]
+        then
+        cd ${WORKSPACE}/configuration/gendom-7353/cfg/
+        scp ${sshOptions} -r ${WORKSPACE}/configuration/gendom-7353/log4j/4.0.0/DmiLog4j.xml ${sshUser}@${cloudOpsHost}:/opt/fedex/genesis/gendom/current/cfg/
+
+        fi
+        """
+         }
+     }
+}

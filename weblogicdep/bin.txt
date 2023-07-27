@@ -1,0 +1,2412 @@
+bin_common.sh
+#! /bin/sh
+
+#    **********************************************************************    #
+#                                                                              #
+#    This file configures environment independent variables that are           #
+#    imported automatically from the shell scripts.                            #
+#                                                                              #
+#    **********************************************************************    #
+
+#JRE_LINK=/opt/fedex/genesis/gendom/jre
+#WLS_LINK=/opt/fedex/genesis/gendom/wls
+#PROJECT_DOMAIN_HOME=/opt/fedex/genesis/gendom/domain/current/gendomDomain
+#PROJECT_JAR_HOME=/opt/fedex/genesis/gendom/domain/current/lib
+#BIN_PROJECT_HOME=/opt/fedex/genesis/gendom/domain/current/bin
+#VAR_PROJECT_HOME=/var/fedex/genesis/gendom
+#DEPLOYMENT_PROJECT_TARGET=gendomCluster
+#PROJECT_LOG_HOME=/var/fedex/genesis/gendom/log
+EAINUMBER=7375
+**********************************************************************************************************************************
+env.sh
+export JRE_LINK=@@JRE_LINK@@
+export PROJECT_DOMAIN_HOME=@@PROJECT_DOMAIN_HOME@@
+export PROJECT_JAR_HOME=@@PROJECT_JAR_HOME@@
+export VAR_PROJECT_HOME=@@VAR_PROJECT_HOME@@
+export PROJECT_LOG_HOME=@@PROJECT_LOG_HOME@@
+#export PROJECT_ADMIN_URL=http://@@PROJECT_ADMIN_SERVER@@:@@PROJECT_ADMIN_PORT@@
+export PROJECT_ADMIN_URL=t3s://@@PROJECT_ADMIN_SERVER@@:9902
+export PROJECT_MANAGED_SERVER_URL=t3s://localhost:@@PROJECT_MANAGED_PORT@@
+export PROJECT_SERVER_LOG_FLAG=@@PROJECT_SERVER_LOG_FLAG@@
+export APPD_AGENT=@@APPD_AGENT@@
+#export ENVIRONMENT=L2
+export ENVIRONMENT=@@ENVIRONMENT@@
+#export USER_MEM_ARGS="-Xms512m -Xmx512m"
+
+**********************************************************************************************************************************
+package-wdt.sh
+
+#! /bin/sh
+set -x
+WLVM_TARGET_SERVERS='u1059926.test.cloud.fedex.com,u1060169.test.cloud.fedex.com,u1060168.test.cloud.fedex.com,u1060414.test.cloud.fedex.com,u1059987.test.cloud.fedex.com,u1060171.test.cloud.fedex.com,u1059991.test.cloud.fedex.com'
+myservers=(`echo ${WLVM_TARGET_SERVERS} | tr ',' ' '`)
+echo "myservers: ${myservers}"
+
+myadminserver=${myservers[0]}
+myclustersize=${#myservers[@]}
+myresourcetarget='genadmin'
+if [ ${myclustersize} -gt 1 ]; then myresourcetarget='usdom-alphaCluster,usdom-bravoCluster,usrecogCluster'; fi
+
+# Loop through the servers and set the correct value for WLVM_TARGET_TMP
+
+# if [[ ${#myservers[@]} -lt 13 ]]; then
+#     echo "Error: myservers array must have at least 13 elements."
+#     exit 1
+# elif [[ ${#myservers[@]} -ge 13 ]]; then
+#for i in "${!myservers[@]}"; do
+
+    if [[ ${myservers[@]} =~ ^(${myservers[0]}|${myservers[1]}|${myservers[2]}|${myservers[3]}|${myservers[4]}) ]]; then
+        WLVM_TARGET_TMP="/var/fedex/genesis/gendom/tmp"
+        WLVM_DOMAIN_PARENT="/opt/fedex/genesis/gendom/current"
+        WLVM_DOMAIN_HOME="/opt/fedex/genesis/gendom/current/usgendom"
+        WLVM_TARGET_VAR="/var/fedex/genesis/gendom"
+    elif [[ ${myservers[@]} =~ ^(${myservers[5]}|${myservers[6]}) ]]; then
+        WLVM_TARGET_TMP="/var/fedex/genesis/genrecog/tmp"
+        WLVM_DOMAIN_PARENT="/opt/fedex/genesis/genrecog/current"
+        WLVM_DOMAIN_HOME="/opt/fedex/genesis/genrecog/current/usgendom"
+        WLVM_TARGET_VAR="/var/fedex/genesis/genrecog"
+    else
+        echo "Error: Invalid index value"
+        exit 1
+    fi
+#done
+#fi
+
+# for i in "${!myservers[@]}"; 
+# do
+#   if [ i < 7 ]; then
+#       WLVM_TARGET_TMP="${WLVM_TARGET_TMP_VALUE[0]}"
+#       WLVM_DOMAIN_PARENT="${WLVM_DOMAIN_PARENT_VALUE[0]}"
+#       WLVM_DOMAIN_HOME="${WLVM_DOMAIN_HOME_VALUE[0]}"
+#   elif [ i < 9 ]; then
+#       WLVM_TARGET_TMP="${WLVM_TARGET_TMP_VALUE[1]}"
+#       WLVM_DOMAIN_PARENT="${WLVM_DOMAIN_PARENT_VALUE[1]}"
+#       WLVM_DOMAIN_HOME="${WLVM_DOMAIN_HOME_VALUE[1]}"
+#   elif [ i < 11 ]; then
+#       WLVM_TARGET_TMP="${WLVM_TARGET_TMP_VALUE[2]}"
+#       WLVM_DOMAIN_PARENT="${WLVM_DOMAIN_PARENT_VALUE[2]}"
+#       WLVM_DOMAIN_HOME="${WLVM_DOMAIN_HOME_VALUE[2]}"
+#       WLVM_TARGET_VAR="${WLVM_TARGET_VAR_VALUE[2]}"
+#   else
+#       WLVM_TARGET_TMP="${WLVM_TARGET_TMP_VALUE[3]}"
+#       WLVM_DOMAIN_PARENT="${WLVM_DOMAIN_PARENT_VALUE[3]}"
+#       WLVM_DOMAIN_HOME="${WLVM_DOMAIN_HOME_VALUE[3]}"
+#       WLVM_TARGET_VAR="${WLVM_TARGET_VAR_VALUE[3]}"
+#   fi
+# done
+
+# Package initialization
+
+if [ -d ${WLVM_PACKAGE} ]; then
+  rm -r ${WLVM_PACKAGE}
+  if [ ${?} -ne 0 ]; then exit 1; fi
+fi
+
+mydeploy=${WLVM_PACKAGE}/stage
+mkdir -p ${mydeploy}
+if [ ${?} -ne 0 ]; then exit 1; fi
+
+
+mywlsdeploy=${mydeploy}/wlsdeploy
+mkdir -p ${mywlsdeploy}
+if [ ${?} -ne 0 ]; then exit 1; fi
+
+# Package WLVM scripts
+
+cp ${WLVM_HOME}/env-wdt.sh ${WLVM_PACKAGE}/env.sh
+if [ ${?} -ne 0 ]; then exit 1; fi
+sed -i -e "s:@@JAVA_HOME@@:${WLVM_TARGET_JRE}:g" ${WLVM_PACKAGE}/env.sh
+if [ ${?} -ne 0 ]; then exit 1; fi
+sed -i -e "s:@@ORACLE_HOME@@:${WLVM_TARGET_ORACLE}:g" ${WLVM_PACKAGE}/env.sh
+if [ ${?} -ne 0 ]; then exit 1; fi
+sed -i -e "s:@@WLVM_HOME@@:${WLVM_TARGET_TMP}:g" ${WLVM_PACKAGE}/env.sh
+if [ ${?} -ne 0 ]; then exit 1; fi
+sed -i -e "s:@@WDT_HOME@@:${WLVM_TARGET_TMP}/stage/weblogic-deploy:g" ${WLVM_PACKAGE}/env.sh
+if [ ${?} -ne 0 ]; then exit 1; fi
+sed -i -e "s/@@DOMAIN_ENVIRONMENT@@/${WLVM_TARGET}/g" ${WLVM_PACKAGE}/env.sh
+if [ ${?} -ne 0 ]; then exit 1; fi
+sed -i -e "s:@@DOMAIN_STAGE@@:${WLVM_TARGET_TMP}/stage:g" ${WLVM_PACKAGE}/env.sh
+if [ ${?} -ne 0 ]; then exit 1; fi
+sed -i -e "s:@@DOMAIN_PARENT@@:${WLVM_DOMAIN_PARENT}:g" ${WLVM_PACKAGE}/env.sh
+if [ ${?} -ne 0 ]; then exit 1; fi
+sed -i -e "s:@@DOMAIN_HOME@@:${WLVM_DOMAIN_HOME}:g" ${WLVM_PACKAGE}/env.sh
+if [ ${?} -ne 0 ]; then exit 1; fi
+sed -i -e "s:@@DOMAIN_DEPLOY@@:${WLVM_DOMAIN_HOME}/wlsdeploy:g" ${WLVM_PACKAGE}/env.sh
+if [ ${?} -ne 0 ]; then exit 1; fi
+sed -i -e "s:@@DOMAIN_VAR@@:${WLVM_TARGET_VAR}:g" ${WLVM_PACKAGE}/env.sh
+if [ ${?} -ne 0 ]; then exit 1; fi
+
+cp ${WLVM_HOME}/create.sh ${WLVM_PACKAGE}/create.sh
+if [ ${?} -ne 0 ]; then exit 1; fi
+
+cp ${WLVM_HOME}/start.sh ${WLVM_PACKAGE}/start.sh
+if [ ${?} -ne 0 ]; then exit 1; fi
+
+cp ${WLVM_HOME}/stop.sh ${WLVM_PACKAGE}/stop.sh
+if [ ${?} -ne 0 ]; then exit 1; fi
+
+cp ${WLVM_HOME}/kill.sh ${WLVM_PACKAGE}/kill.sh
+if [ ${?} -ne 0 ]; then exit 1; fi
+
+cp ${WLVM_HOME}/clean.sh ${WLVM_PACKAGE}/clean.sh
+if [ ${?} -ne 0 ]; then exit 1; fi
+
+
+
+#cp ${WORKSPACE}/dist/DMI-1.2.0-RELEASE.war ${WLVM_PACKAGE}/
+
+# Package domain applications
+
+myapplications=${mywlsdeploy}/applications
+mkdir -p ${myapplications}
+if [ ${?} -ne 0 ]; then exit 1; fi
+
+#cp ${WLVM_ROOT}/dist/DMI-1.2.0-RELEASE.war ${myapplications}/DMI-1.2.0-RELEASE.war
+
+# Package domain classpath libraries
+
+myclasspathlibraries=${mywlsdeploy}/classpathLibraries
+mkdir -p ${myclasspathlibraries}
+if [ ${?} -ne 0 ]; then exit 1; fi
+
+cp ${WLVM_ROOT}/domain/lib/* ${myclasspathlibraries}
+if [ ${?} -ne 0 ]; then exit 1; fi
+
+# Package domain control scripts
+
+mydomainclasspath=${WLVM_DOMAIN_HOME}/wlsdeploy/classpathLibraries
+
+mydomainbin=${mywlsdeploy}/domainBin
+mkdir -p ${mydomainbin}
+if [ ${?} -ne 0 ]; then exit 1; fi
+
+cp ${WLVM_ROOT}/domain/bin/* ${mydomainbin}
+if [ ${?} -ne 0 ]; then exit 1; fi
+sed -i -e "s:@@JRE_LINK@@:${WLVM_DOMAIN_PARENT}/jre:g" ${mydomainbin}/env.sh
+if [ ${?} -ne 0 ]; then exit 1; fi
+sed -i -e "s:@@PROJECT_DOMAIN_HOME@@:${WLVM_DOMAIN_HOME}:g" ${mydomainbin}/env.sh
+if [ ${?} -ne 0 ]; then exit 1; fi
+sed -i -e "s:@@PROJECT_JAR_HOME@@:${mydomainclasspath}:g" ${mydomainbin}/env.sh
+if [ ${?} -ne 0 ]; then exit 1; fi
+sed -i -e "s:@@VAR_PROJECT_HOME@@:${WLVM_TARGET_VAR}:g" ${mydomainbin}/env.sh
+if [ ${?} -ne 0 ]; then exit 1; fi
+sed -i -e "s:@@PROJECT_LOG_HOME@@:${WLVM_TARGET_LOG}:g" ${mydomainbin}/env.sh
+if [ ${?} -ne 0 ]; then exit 1; fi
+sed -i -e "s/@@PROJECT_ADMIN_SERVER@@/${myadminserver}/g" ${mydomainbin}/env.sh
+if [ ${?} -ne 0 ]; then exit 1; fi
+sed -i -e "s/@@PROJECT_ADMIN_PORT@@/${WLVM_SERVER_ADMIN_PORT}/g" ${mydomainbin}/env.sh
+if [ ${?} -ne 0 ]; then exit 1; fi
+sed -i -e "s/@@PROJECT_MANAGED_PORT@@/${WLVM_SERVER_MANAGED_PORT}/g" ${mydomainbin}/env.sh
+if [ ${?} -ne 0 ]; then exit 1; fi
+sed -i -e "s/@@PROJECT_SERVER_LOG_FLAG@@/${WLVM_SERVER_LOG}/g" ${mydomainbin}/env.sh
+if [ ${?} -ne 0 ]; then exit 1; fi
+sed -i -e "s/@@APPD_AGENT@@/${WLVM_SERVER_APPD}/g" ${mydomainbin}/env.sh
+if [ ${?} -ne 0 ]; then exit 1; fi
+
+# Package domain config
+
+cp ${WLVM_ROOT}/domain/wdt/* ${mydeploy}
+if [ ${?} -ne 0 ]; then exit 1; fi
+
+myencryptionsecret=${mydeploy}/model.secret
+echo "${WLVM_PACKAGE_SECRET_WDT}" > ${myencryptionsecret}
+if [ ${?} -ne 0 ]; then exit 1; fi
+
+sed -i -e "s:@@JAVA_HOME@@:${WLVM_TARGET_JRE}:g" ${mydeploy}/env.sh
+if [ ${?} -ne 0 ]; then exit 1; fi
+sed -i -e "s:@@ORACLE_HOME@@:${WLVM_TARGET_ORACLE}:g" ${mydeploy}/env.sh
+if [ ${?} -ne 0 ]; then exit 1; fi
+sed -i -e "s:@@DOMAIN_PARENT@@:${WLVM_DOMAIN_PARENT}:g" ${mydeploy}/env.sh
+if [ ${?} -ne 0 ]; then exit 1; fi
+sed -i -e "s:@@WDT_HOME@@:${WLVM_TARGET_TMP}/stage/weblogic-deploy:g" ${mydeploy}/env.sh
+if [ ${?} -ne 0 ]; then exit 1; fi
+sed -i -e "s:@@DOMAIN_NAME@@:${WLVM_DOMAIN_NAME}:g" ${mydeploy}/env.sh
+if [ ${?} -ne 0 ]; then exit 1; fi
+sed -i -e "s:@@DOMAIN_HOME@@:${WLVM_DOMAIN_HOME}:g" ${mydeploy}/env.sh
+if [ ${?} -ne 0 ]; then exit 1; fi
+sed -i -e "s/@@DOMAIN_ADMIN_PORT@@/${WLVM_SERVER_ADMIN_PORT}/g" ${mydeploy}/env.sh
+if [ ${?} -ne 0 ]; then exit 1; fi
+sed -i -e "s/@@DOMAIN_MANAGED_PORT@@/${WLVM_SERVER_MANAGED_PORT}/g" ${mydeploy}/env.sh
+if [ ${?} -ne 0 ]; then exit 1; fi
+sed -i -e "s/@@DOMAIN_USERNAME@@/${WLVM_DOMAIN_USERNAME}/g" ${mydeploy}/env.sh
+if [ ${?} -ne 0 ]; then exit 1; fi
+sed -i -e "s/@@DOMAIN_PASSWORD@@/${WLVM_DOMAIN_PASSWORD}/g" ${mydeploy}/env.sh
+if [ ${?} -ne 0 ]; then exit 1; fi
+
+sed -i -e "s/@@DB_PWD_STG@@/${DB_PWD_STG}/g" ${mydeploy}/model.properties
+if [ ${?} -ne 0 ]; then exit 1; fi
+sed -i -e "s|@@DB_URL@@|${DB_URL}|g" ${mydeploy}/model.properties
+if [ ${?} -ne 0 ]; then exit 1; fi
+sed -i -e "s/@@CLUSTER_SIZE@@/${myclustersize}/g" ${mydeploy}/model.properties
+if [ ${?} -ne 0 ]; then exit 1; fi
+sed -i -e "s/@@RESOURCE_TARGET@@/${myresourcetarget}/g" ${mydeploy}/model.properties
+if [ ${?} -ne 0 ]; then exit 1; fi
+
+mystatus=0
+pushd ${mydeploy}
+zip -r model wlsdeploy
+if [ ${?} -ne 0 ]; then mystatus=1; fi
+popd
+if [ ${mystatus} -ne 0 ]; then exit 1; fi
+rm -r ${mywlsdeploy}
+if [ ${?} -ne 0 ]; then exit 1; fi
+
+pushd ${mydeploy}
+unzip weblogic-deploy.zip
+if [ ${?} -ne 0 ]; then mystatus=1; fi
+popd
+if [ ${mystatus} -ne 0 ]; then exit 1; fi
+rm ${mydeploy}/weblogic-deploy.zip
+if [ ${?} -ne 0 ]; then exit 1; fi
+
+# Exit gracefully
+
+exit 0
+***************************************************************************************************************************************
+start.sh 
+#!/bin/bash
+set -x
+###########################################################################
+## start Servers
+###########################################################################
+EAINUMBER=7353
+export EAINUMBER
+
+#user=`id | tr "=()" "   " | awk '{print $3}'`
+#if [[ $user != gendom ]]
+#then
+#    echo "This application may only be run by the genesis account"
+#    exit 1
+#fi
+
+# Sanity check mandatory environment specific variables are set
+if [ -z ${JRE_LINK} ]; then
+  echo 'Environment variable "JRE_LINK" not set'
+  exit 1
+fi
+if [ -z ${PROJECT_DOMAIN_HOME} ]; then
+  echo 'Environment variable "PROJECT_DOMAIN_HOME" not set'
+  exit 1
+fi
+if [ -z ${PROJECT_ADMIN_URL} ]; then
+  echo 'Environment variable "PROJECT_ADMIN_URL" not set'
+  exit 1
+fi
+if [ -z ${PROJECT_JAR_HOME} ]; then
+  echo 'Environment variable "PROJECT_JAR_HOME" not set'
+  exit 1
+fi
+if [ -z ${EAINUMBER} ]; then
+  echo 'Environment variable "EAINUMBER" not set'
+  exit 1
+fi
+
+# Set project properties
+#DOMAIN_HOME=/opt/fedex/genesis/gendom/current/usgendom/bin/
+
+usgendom_PROPERTIES_SSL_IGNORE=-Dweblogic.security.SSL.ignoreHostnameVerification=true
+usgendom_PROPERTIES_DATA_TRANSFER=-Dweblogic.data.canTransferAnyFile=true
+usgendom_PROPERTIES_IP4STACK=-Djava.net.preferIP4Stack=true
+usgendom_PROPERTIES_WSEE_WSTX_WSAT=-Dweblogic.wsee.wstx.wsat.deployed=false
+usgendom_PROPERTIES_SSL_PROTOCOL=-Dweblogic.security.SSL.minimumProtocolVersion=TLSv1.2
+usgendom_PROPERTIES_SECURITY_PROPS=-Djava.security.properties=/opt/security/java.security.override
+
+# Set Java vendor
+JAVA_VENDOR=Oracle
+export JAVA_VENDOR
+
+HOSTNAME=`hostname`
+HOST_PREFIX=`echo $HOSTNAME | cut -c1-8`
+case $HOST_PREFIX in
+    
+    'u1062546'|'u1064310'|'u1064309'|'u1064311'|'u1064312'|'u1064637'|'u1064638'|'u1059926'|'u1060169'|'u1060168'|'u1060414'|'u1059987'|'u1060171'|'u1059991'|'u1051550'|'u1051291'|'u1051292'|'u1051661'|'u1052262'|'u1061499'|'u1061498'|'u1061568')
+  
+#------------------------- L3 env ------------------------------ 
+        if [[ $HOST_PREFIX = u1062546 ]]
+        then
+			export GENDOMENV="L3"
+			
+			 usgendom_PROPERTIES="${usgendom_PROPERTIES_SSL_IGNORE} ${usgendom_PROPERTIES_DATA_TRANSFER} ${usgendom_PROPERTIES_IP4STACK} ${usgendom_PROPERTIES_WSEE_WSTX_WSAT} ${usgendom_PROPERTIES_SSL_PROTOCOL} ${usgendom_PROPERTIES_SECURITY_PROPS}"
+        
+        export usgendom_PROPERTIES
+        APPD_SERVER_NAME=gen-lvl3-us-admin-las01
+        export APPD_SERVER_NAME
+		
+ 			sed -i '$ a\weblogic.StopScriptName=stopWebLogic.sh' /opt/fedex/genesis/gendom/current/usgendom/nodemanager/nodemanager.properties
+             sed -i '/^weblogic.StopScriptEnabled=/d' /opt/fedex/genesis/gendom/current/usgendom/nodemanager/nodemanager.properties && echo "weblogic.StopScriptEnabled=true" >> /opt/fedex/genesis/gendom/current/usgendom/nodemanager/nodemanager.properties
+            
+ 			#AppDynamics Script call:
+             if [[ -e /opt/appd/current/appagent/javaagent.jar ]]
+             then
+                 . /opt/appd/current/scripts/app_agent_appd.sh ${EAINUMBER}
+             fi
+             if [[ -e /opt/appd/current/machineagent/machineagent.jar ]]
+             then
+                 /opt/appd/current/scripts/machine_agent_appd.sh start
+             fi
+			
+			cd /opt/fedex/genesis/gendom/current/usgendom/bin/
+			./startWebLogic.sh noderby 1>/dev/null 2>&1 &
+			sleep 30
+			chmod -R 777 *
+			cd /opt/fedex/genesis/gendom/current/usgendom/nodemanager/
+			chmod -R 777 *
+			sed -i -e "s/SecureListener=true/SecureListener=false/g" /opt/fedex/genesis/gendom/current/usgendom/nodemanager/nodemanager.properties
+			cd /opt/fedex/genesis/gendom/current/usgendom/config/nodemanager/
+			chmod -R 777 *
+
+        fi
+
+       if [[ $HOST_PREFIX = u1064310 ]]
+       then
+			export GENDOMENV="L3"
+			
+			USER_MEM_ARGS="-Xms3072m -Xmx3072m"
+			export USER_MEM_ARGS
+			APPD_SERVER_NAME=gen-lvl3-us-gendom-las01
+      		 	export APPD_SERVER_NAME
+
+			cd /opt/fedex/genesis/gendom/current/usgendom/nodemanager/
+			chmod -R 777 *
+			echo "KeyStores=CustomIdentityAndJavaStandardTrust" >> /opt/fedex/genesis/gendom/current/usgendom/nodemanager/nodemanager.properties
+			echo "CustomIdentityKeyStoreFileName=/opt/fedex/genesis/gendom/current/cfg/genusdomL3.jks" >> /opt/fedex/genesis/gendom/current/usgendom/nodemanager/nodemanager.properties
+			echo "CustomIdentityKeyStoreType=JKS" >> /opt/fedex/genesis/gendom/current/usgendom/nodemanager/nodemanager.properties
+			echo "CustomIdentityAlias=genusdoml3" >> /opt/fedex/genesis/gendom/current/usgendom/nodemanager/nodemanager.properties
+			echo "CustomIdentityPrivateKeyPassPhrase=genusdom@7353" >> /opt/fedex/genesis/gendom/current/usgendom/nodemanager/nodemanager.properties
+			echo "JavaStandardTrustKeystore=/opt/fedex/genesis/java8_current/jre/lib/security/cacerts" >> /opt/fedex/genesis/gendom/current/usgendom/nodemanager/nodemanager.properties
+			echo "JavaStandardTrustKeystoreType=jks" >> /opt/fedex/genesis/gendom/current/usgendom/nodemanager/nodemanager.properties
+			#sed -i -e "s/SecureListener=true/SecureListener=false/g" /opt/fedex/genesis/gendom/current/usgendom/nodemanager/nodemanager.properties
+ 			sed -i '$ a\weblogic.StopScriptName=stopWebLogic.sh' /opt/fedex/genesis/gendom/current/usgendom/nodemanager/nodemanager.properties
+             sed -i '/^weblogic.StopScriptEnabled=/d' /opt/fedex/genesis/gendom/current/usgendom/nodemanager/nodemanager.properties && echo "weblogic.StopScriptEnabled=true" >> /opt/fedex/genesis/gendom/current/usgendom/nodemanager/nodemanager.properties
+
+			cd /opt/fedex/genesis/gendom/current/usgendom/servers/gendom11/security/
+			rm -rf boot.properties
+			echo "username=weblogic" > boot.properties
+			echo "password=WebLog1c$" >> boot.properties
+			chmod 775 /opt/fedex/genesis/gendom/current/usgendom/servers/gendom11/security/boot.properties
+		   cd /opt/fedex/genesis/gendom/current/usgendom/bin/
+			nohup ./startNodeManager.sh noderby 1>/dev/null 2>&1 & 
+			#./startNodeManager.sh &
+			sleep 10
+			            
+ 			#AppDynamics Script call:
+             if [[ -e /opt/appd/current/appagent/javaagent.jar ]]
+             then
+                 . /opt/appd/current/scripts/app_agent_appd.sh ${EAINUMBER}
+             fi
+             if [[ -e /opt/appd/current/machineagent/machineagent.jar ]]
+             then
+                 /opt/appd/current/scripts/machine_agent_appd.sh start
+             fi
+			
+			#nohup ./startManagedWebLogic.sh gendom11 t3s://u1062546.test.cloud.fedex.com:9902/ -Dweblogic.management.server=https://u1062546.test.cloud.fedex.com:9902 noderby 1>/dev/null 2>&1 &
+			nohup ./startManagedWebLogic.sh gendom11 t3s://u1062546.test.cloud.fedex.com:9902/ -Dweblogic.security.SSL.trustedCAKeyStore=/opt/fedex/genesis/java8_current/jre/lib/security/cacerts \
+-Dweblogic.security.SSL.trustedCAKeyStoreType=JKS \ -Dweblogic.security.SSL.trustedCAKeyStorePassword=genusdom@7353 \ noderby 1>/dev/null 2>&1 &
+			sleep 10
+			ps -ef | grep java
+       fi
+      
+	  if [[ $HOST_PREFIX = u1064309 ]]
+       then
+			export GENDOMENV="L3"
+			USER_MEM_ARGS="-Xms3072m -Xmx3072m"
+			export USER_MEM_ARGS
+			#MEM_ARGS="${USER_MEM_ARGS}"
+			#export MEM_ARGS
+			APPD_SERVER_NAME=gen-lvl3-us-gendom-las02
+            export APPD_SERVER_NAME
+
+			cd /opt/fedex/genesis/gendom/current/usgendom/nodemanager/
+			chmod -R 777 *
+			echo "KeyStores=CustomIdentityAndJavaStandardTrust" >> /opt/fedex/genesis/gendom/current/usgendom/nodemanager/nodemanager.properties
+			echo "CustomIdentityKeyStoreFileName=/opt/fedex/genesis/gendom/current/cfg/genusdomL3.jks" >> /opt/fedex/genesis/gendom/current/usgendom/nodemanager/nodemanager.properties
+			echo "CustomIdentityKeyStoreType=JKS" >> /opt/fedex/genesis/gendom/current/usgendom/nodemanager/nodemanager.properties
+			echo "CustomIdentityAlias=genusdoml3" >> /opt/fedex/genesis/gendom/current/usgendom/nodemanager/nodemanager.properties
+			echo "CustomIdentityPrivateKeyPassPhrase=genusdom@7353" >> /opt/fedex/genesis/gendom/current/usgendom/nodemanager/nodemanager.properties
+			echo "JavaStandardTrustKeystore=/opt/fedex/genesis/java8_current/jre/lib/security/cacerts" >> /opt/fedex/genesis/gendom/current/usgendom/nodemanager/nodemanager.properties
+			echo "JavaStandardTrustKeystoreType=jks" >> /opt/fedex/genesis/gendom/current/usgendom/nodemanager/nodemanager.properties
+			#sed -i -e "s/SecureListener=true/SecureListener=false/g" /opt/fedex/genesis/gendom/current/usgendom/nodemanager/nodemanager.properties
+			sed -i '$ a\weblogic.StopScriptName=stopWebLogic.sh' /opt/fedex/genesis/gendom/current/usgendom/nodemanager/nodemanager.properties
+			sed -i '/^weblogic.StopScriptEnabled=/d' /opt/fedex/genesis/gendom/current/usgendom/nodemanager/nodemanager.properties && echo "weblogic.StopScriptEnabled=true" >> /opt/fedex/genesis/gendom/current/usgendom/nodemanager/nodemanager.properties
+          
+			cd /opt/fedex/genesis/gendom/current/usgendom/servers/gendom12/security/
+			rm -rf boot.properties
+			echo "username=weblogic" > boot.properties
+			echo "password=WebLog1c$" >> boot.properties
+			chmod 775 /opt/fedex/genesis/gendom/current/usgendom/servers/gendom12/security/boot.properties
+		   cd /opt/fedex/genesis/gendom/current/usgendom/bin/
+			nohup ./startNodeManager.sh noderby 1>/dev/null 2>&1 & 
+			#./startNodeManager.sh &
+			sleep 10
+			 
+ 		#AppDynamics Script call:
+             if [[ -e /opt/appd/current/appagent/javaagent.jar ]]
+             then
+                 . /opt/appd/current/scripts/app_agent_appd.sh ${EAINUMBER}
+             fi
+             if [[ -e /opt/appd/current/machineagent/machineagent.jar ]]
+             then
+                 /opt/appd/current/scripts/machine_agent_appd.sh start
+             fi
+
+			#nohup ./startManagedWebLogic.sh gendom12 t3s://u1062546.test.cloud.fedex.com:9902/ noderby 1>/dev/null 2>&1 &
+			nohup ./startManagedWebLogic.sh gendom12 t3s://u1062546.test.cloud.fedex.com:9902/ -Dweblogic.security.SSL.trustedCAKeyStore=/opt/fedex/genesis/java8_current/jre/lib/security/cacerts \
+-Dweblogic.security.SSL.trustedCAKeyStoreType=JKS \ -Dweblogic.security.SSL.trustedCAKeyStorePassword=genusdom@7353 \ noderby 1>/dev/null 2>&1 &
+			sleep 10
+			ps -ef | grep java
+        fi
+       
+	   if [[ $HOST_PREFIX = u1064311 ]]
+        then
+			export GENDOMENV="L3"
+			USER_MEM_ARGS="-Xms3072m -Xmx3072m"
+			export USER_MEM_ARGS
+			APPD_SERVER_NAME=gen-lvl3-us-gendom-las03
+            export APPD_SERVER_NAME
+
+			cd /opt/fedex/genesis/gendom/current/usgendom/nodemanager/
+			chmod -R 777 *
+			echo "KeyStores=CustomIdentityAndJavaStandardTrust" >> /opt/fedex/genesis/gendom/current/usgendom/nodemanager/nodemanager.properties
+			echo "CustomIdentityKeyStoreFileName=/opt/fedex/genesis/gendom/current/cfg/genusdomL3.jks" >> /opt/fedex/genesis/gendom/current/usgendom/nodemanager/nodemanager.properties
+			echo "CustomIdentityKeyStoreType=JKS" >> /opt/fedex/genesis/gendom/current/usgendom/nodemanager/nodemanager.properties
+			echo "CustomIdentityAlias=genusdoml3" >> /opt/fedex/genesis/gendom/current/usgendom/nodemanager/nodemanager.properties
+			echo "CustomIdentityPrivateKeyPassPhrase=genusdom@7353" >> /opt/fedex/genesis/gendom/current/usgendom/nodemanager/nodemanager.properties
+			echo "JavaStandardTrustKeystore=/opt/fedex/genesis/java8_current/jre/lib/security/cacerts" >> /opt/fedex/genesis/gendom/current/usgendom/nodemanager/nodemanager.properties
+			echo "JavaStandardTrustKeystoreType=jks" >> /opt/fedex/genesis/gendom/current/usgendom/nodemanager/nodemanager.properties
+			#sed -i -e "s/SecureListener=true/SecureListener=false/g" /opt/fedex/genesis/gendom/current/usgendom/nodemanager/nodemanager.properties
+ 			sed -i '$ a\weblogic.StopScriptName=stopWebLogic.sh' /opt/fedex/genesis/gendom/current/usgendom/nodemanager/nodemanager.properties
+             sed -i '/^weblogic.StopScriptEnabled=/d' /opt/fedex/genesis/gendom/current/usgendom/nodemanager/nodemanager.properties && echo "weblogic.StopScriptEnabled=true" >> /opt/fedex/genesis/gendom/current/usgendom/nodemanager/nodemanager.properties
+           
+			cd /opt/fedex/genesis/gendom/current/usgendom/servers/gendom13/security/
+			rm -rf boot.properties
+			echo "username=weblogic" > boot.properties
+			echo "password=WebLog1c$" >> boot.properties
+			chmod 775 /opt/fedex/genesis/gendom/current/usgendom/servers/gendom13/security/boot.properties
+		   cd /opt/fedex/genesis/gendom/current/usgendom/bin/
+			nohup ./startNodeManager.sh noderby 1>/dev/null 2>&1 & 
+			#./startNodeManager.sh &
+			sleep 10
+			 
+ 		#AppDynamics Script call:
+             if [[ -e /opt/appd/current/appagent/javaagent.jar ]]
+             then
+                 . /opt/appd/current/scripts/app_agent_appd.sh ${EAINUMBER}
+             fi
+             if [[ -e /opt/appd/current/machineagent/machineagent.jar ]]
+             then
+                 /opt/appd/current/scripts/machine_agent_appd.sh start
+             fi
+			
+			#nohup ./startManagedWebLogic.sh gendom13 t3s://u1062546.test.cloud.fedex.com:9902/ noderby 1>/dev/null 2>&1 &
+			nohup ./startManagedWebLogic.sh gendom13 t3s://u1062546.test.cloud.fedex.com:9902/ -Dweblogic.security.SSL.trustedCAKeyStore=/opt/fedex/genesis/java8_current/jre/lib/security/cacerts \
+-Dweblogic.security.SSL.trustedCAKeyStoreType=JKS \ -Dweblogic.security.SSL.trustedCAKeyStorePassword=genusdom@7353 \ noderby 1>/dev/null 2>&1 &
+			sleep 10
+			ps -ef | grep java
+        fi	
+       
+	   if [[ $HOST_PREFIX = u1064312 ]]
+        then
+			export GENDOMENV="L3"
+			USER_MEM_ARGS="-Xms3072m -Xmx3072m"
+			export USER_MEM_ARGS
+			APPD_SERVER_NAME=gen-lvl3-us-gendom-las04
+            export APPD_SERVER_NAME
+
+			cd /opt/fedex/genesis/gendom/current/usgendom/nodemanager/
+			chmod -R 777 *
+			echo "KeyStores=CustomIdentityAndJavaStandardTrust" >> /opt/fedex/genesis/gendom/current/usgendom/nodemanager/nodemanager.properties
+			echo "CustomIdentityKeyStoreFileName=/opt/fedex/genesis/gendom/current/cfg/genusdomL3.jks" >> /opt/fedex/genesis/gendom/current/usgendom/nodemanager/nodemanager.properties
+			echo "CustomIdentityKeyStoreType=JKS" >> /opt/fedex/genesis/gendom/current/usgendom/nodemanager/nodemanager.properties
+			echo "CustomIdentityAlias=genusdoml3" >> /opt/fedex/genesis/gendom/current/usgendom/nodemanager/nodemanager.properties
+			echo "CustomIdentityPrivateKeyPassPhrase=genusdom@7353" >> /opt/fedex/genesis/gendom/current/usgendom/nodemanager/nodemanager.properties
+			echo "JavaStandardTrustKeystore=/opt/fedex/genesis/java8_current/jre/lib/security/cacerts" >> /opt/fedex/genesis/gendom/current/usgendom/nodemanager/nodemanager.properties
+			echo "JavaStandardTrustKeystoreType=jks" >> /opt/fedex/genesis/gendom/current/usgendom/nodemanager/nodemanager.properties
+			#sed -i -e "s/SecureListener=true/SecureListener=false/g" /opt/fedex/genesis/gendom/current/usgendom/nodemanager/nodemanager.properties
+ 			sed -i '$ a\weblogic.StopScriptName=stopWebLogic.sh' /opt/fedex/genesis/gendom/current/usgendom/nodemanager/nodemanager.properties
+            sed -i '/^weblogic.StopScriptEnabled=/d' /opt/fedex/genesis/gendom/current/usgendom/nodemanager/nodemanager.properties && echo "weblogic.StopScriptEnabled=true" >> /opt/fedex/genesis/gendom/current/usgendom/nodemanager/nodemanager.properties
+          
+		  cd /opt/fedex/genesis/gendom/current/usgendom/servers/gendom14/security/
+			rm -rf boot.propertie
+			echo "username=weblogic" > boot.properties
+			echo "password=WebLog1c$" >> boot.properties
+			chmod 775 /opt/fedex/genesis/gendom/current/usgendom/servers/gendom14/security/boot.properties
+		   cd /opt/fedex/genesis/gendom/current/usgendom/bin/
+			nohup ./startNodeManager.sh noderby 1>/dev/null 2>&1 & 
+			#./startNodeManager.sh &
+			sleep 10
+			 
+ 		  #AppDynamics Script call:
+             if [[ -e /opt/appd/current/appagent/javaagent.jar ]]
+             then
+                 . /opt/appd/current/scripts/app_agent_appd.sh ${EAINUMBER}
+             fi
+             if [[ -e /opt/appd/current/machineagent/machineagent.jar ]]
+             then
+                 /opt/appd/current/scripts/machine_agent_appd.sh start
+             fi
+
+			#nohup ./startManagedWebLogic.sh gendom14 t3s://u1062546.test.cloud.fedex.com:9902/ noderby 1>/dev/null 2>&1 &
+			nohup ./startManagedWebLogic.sh gendom14 t3s://u1062546.test.cloud.fedex.com:9902/ -Dweblogic.security.SSL.trustedCAKeyStore=/opt/fedex/genesis/java8_current/jre/lib/security/cacerts \
+-Dweblogic.security.SSL.trustedCAKeyStoreType=JKS \ -Dweblogic.security.SSL.trustedCAKeyStorePassword=genusdom@7353 \ noderby 1>/dev/null 2>&1 &
+			sleep 10
+			ps -ef | grep java
+        fi
+       
+	   if [[ $HOST_PREFIX = u1064637 ]]
+        then
+			export GENDOMENV="L3"
+			
+			USER_MEM_ARGS="-Xms1024m -Xmx1024m"
+			export USER_MEM_ARGS
+			APPD_SERVER_NAME=gen-lvl3-us-recog-las01
+            export APPD_SERVER_NAME
+
+			cd /opt/fedex/genesis/genrecog/current/usgendom/nodemanager/
+			chmod -R 777 *
+			echo "KeyStores=CustomIdentityAndJavaStandardTrust" >> /opt/fedex/genesis/genrecog/current/usgendom/nodemanager/nodemanager.properties
+			echo "CustomIdentityKeyStoreFileName=/opt/fedex/genesis/genrecog/current/cfg/genusdomL3.jks" >> /opt/fedex/genesis/genrecog/current/usgendom/nodemanager/nodemanager.properties
+			echo "CustomIdentityKeyStoreType=JKS" >> /opt/fedex/genesis/genrecog/current/usgendom/nodemanager/nodemanager.properties
+			echo "CustomIdentityAlias=genusdoml3" >> /opt/fedex/genesis/genrecog/current/usgendom/nodemanager/nodemanager.properties
+			echo "CustomIdentityPrivateKeyPassPhrase=genusdom@7353" >> /opt/fedex/genesis/genrecog/current/usgendom/nodemanager/nodemanager.properties
+			echo "JavaStandardTrustKeystore=/opt/fedex/genesis/java8_current/jre/lib/security/cacerts" >> /opt/fedex/genesis/genrecog/current/usgendom/nodemanager/nodemanager.properties
+			echo "JavaStandardTrustKeystoreType=jks" >> /opt/fedex/genesis/genrecog/current/usgendom/nodemanager/nodemanager.properties
+ 			sed -i '$ a\weblogic.StopScriptName=stopWebLogic.sh' /opt/fedex/genesis/genrecog/current/usgendom/nodemanager/nodemanager.properties
+             sed -i '/^weblogic.StopScriptEnabled=/d' /opt/fedex/genesis/genrecog/current/usgendom/nodemanager/nodemanager.properties && echo "weblogic.StopScriptEnabled=true" >> /opt/fedex/genesis/genrecog/current/usgendom/nodemanager/nodemanager.properties
+          
+			#sed -i -e "s/SecureListener=true/SecureListener=false/g" /opt/fedex/genesis/genrecog/current/usgendom/nodemanager/nodemanager.properties
+			cd /opt/fedex/genesis/genrecog/current/usgendom/servers/genrecog3/security/
+			rm -rf boot.properties
+			echo "username=weblogic" > boot.properties
+			echo "password=WebLog1c$" >> boot.properties
+			chmod 775 /opt/fedex/genesis/genrecog/current/usgendom/servers/genrecog3/security/boot.properties
+		   cd /opt/fedex/genesis/genrecog/current/usgendom/bin/
+			nohup ./startNodeManager.sh noderby 1>/dev/null 2>&1 & 
+			#./startNodeManager.sh &
+			sleep 10
+			 
+ 		#AppDynamics Script call:
+             if [[ -e /opt/appd/current/appagent/javaagent.jar ]]
+             then
+                 . /opt/appd/current/scripts/app_agent_appd.sh ${EAINUMBER}
+             fi
+             if [[ -e /opt/appd/current/machineagent/machineagent.jar ]]
+             then
+                 /opt/appd/current/scripts/machine_agent_appd.sh start
+             fi
+			
+			#nohup ./startManagedWebLogic.sh genrecog3 t3s://u1062546.test.cloud.fedex.com:9902/ noderby 1>/dev/null 2>&1 &
+			nohup ./startManagedWebLogic.sh genrecog3 t3s://u1062546.test.cloud.fedex.com:9902/ -Dweblogic.security.SSL.trustedCAKeyStore=/opt/fedex/genesis/java8_current/jre/lib/security/cacerts \
+-Dweblogic.security.SSL.trustedCAKeyStoreType=JKS \ -Dweblogic.security.SSL.trustedCAKeyStorePassword=genusdom@7353 \ noderby 1>/dev/null 2>&1 &
+			sleep 10
+			ps -ef | grep java
+        fi
+       
+	   if [[ $HOST_PREFIX = u1064638 ]]
+        then
+			export GENDOMENV="L3"
+			USER_MEM_ARGS="-Xms1024m -Xmx1024m"
+			export USER_MEM_ARGS
+			APPD_SERVER_NAME=gen-lvl3-us-recog-las02
+            export APPD_SERVER_NAME
+
+			cd /opt/fedex/genesis/genrecog/current/usgendom/nodemanager/
+			chmod -R 777 *
+			echo "KeyStores=CustomIdentityAndJavaStandardTrust" >> /opt/fedex/genesis/genrecog/current/usgendom/nodemanager/nodemanager.properties
+			echo "CustomIdentityKeyStoreFileName=/opt/fedex/genesis/genrecog/current/cfg/genusdomL3.jks" >> /opt/fedex/genesis/genrecog/current/usgendom/nodemanager/nodemanager.properties
+			echo "CustomIdentityKeyStoreType=JKS" >> /opt/fedex/genesis/genrecog/current/usgendom/nodemanager/nodemanager.properties
+			echo "CustomIdentityAlias=genusdoml3" >> /opt/fedex/genesis/genrecog/current/usgendom/nodemanager/nodemanager.properties
+			echo "CustomIdentityPrivateKeyPassPhrase=genusdom@7353" >> /opt/fedex/genesis/genrecog/current/usgendom/nodemanager/nodemanager.properties
+			echo "JavaStandardTrustKeystore=/opt/fedex/genesis/java8_current/jre/lib/security/cacerts" >> /opt/fedex/genesis/genrecog/current/usgendom/nodemanager/nodemanager.properties
+			echo "JavaStandardTrustKeystoreType=jks" >> /opt/fedex/genesis/genrecog/current/usgendom/nodemanager/nodemanager.properties
+			#sed -i -e "s/SecureListener=true/SecureListener=false/g" /opt/fedex/genesis/genrecog/current/usgendom/nodemanager/nodemanager.properties
+			sed -i '$ a\weblogic.StopScriptName=stopWebLogic.sh' /opt/fedex/genesis/genrecog/current/usgendom/nodemanager/nodemanager.properties
+             sed -i '/^weblogic.StopScriptEnabled=/d' /opt/fedex/genesis/genrecog/current/usgendom/nodemanager/nodemanager.properties && echo "weblogic.StopScriptEnabled=true" >> /opt/fedex/genesis/genrecog/current/usgendom/nodemanager/nodemanager.properties
+         
+			cd /opt/fedex/genesis/genrecog/current/usgendom/servers/genrecog4/security/
+			rm -rf boot.properties
+			echo "username=weblogic" > boot.properties
+			echo "password=WebLog1c$" >> boot.properties
+			chmod 775 /opt/fedex/genesis/genrecog/current/usgendom/servers/genrecog4/security/boot.properties
+		   cd /opt/fedex/genesis/genrecog/current/usgendom/bin/
+			nohup ./startNodeManager.sh noderby 1>/dev/null 2>&1 & 
+			#./startNodeManager.sh &
+			sleep 10
+			 
+ 		#AppDynamics Script call:
+             if [[ -e /opt/appd/current/appagent/javaagent.jar ]]
+             then
+                 . /opt/appd/current/scripts/app_agent_appd.sh ${EAINUMBER}
+             fi
+             if [[ -e /opt/appd/current/machineagent/machineagent.jar ]]
+             then
+                 /opt/appd/current/scripts/machine_agent_appd.sh start
+             fi
+			
+			#nohup ./startManagedWebLogic.sh genrecog4 t3s://u1062546.test.cloud.fedex.com:9902/ noderby 1>/dev/null 2>&1 &
+			nohup ./startManagedWebLogic.sh genrecog4 t3s://u1062546.test.cloud.fedex.com:9902/ -Dweblogic.security.SSL.trustedCAKeyStore=/opt/fedex/genesis/java8_current/jre/lib/security/cacerts \
+-Dweblogic.security.SSL.trustedCAKeyStoreType=JKS \ -Dweblogic.security.SSL.trustedCAKeyStorePassword=genusdom@7353 \ noderby 1>/dev/null 2>&1 &
+			sleep 10
+			ps -ef | grep java
+        fi
+	
+#----------------------------- L3DR -------------------------------------	
+	if [[ $HOST_PREFIX = u1059926 ]]
+        then
+			export GENDOMENV="L3DR"
+			usgendom_PROPERTIES="${usgendom_PROPERTIES_SSL_IGNORE} ${usgendom_PROPERTIES_DATA_TRANSFER} ${usgendom_PROPERTIES_IP4STACK} ${usgendom_PROPERTIES_WSEE_WSTX_WSAT} ${usgendom_PROPERTIES_SSL_PROTOCOL} ${usgendom_PROPERTIES_SECURITY_PROPS}"
+        
+        export usgendom_PROPERTIES
+        APPD_SERVER_NAME=gen-lvl3-us-dr-admin-atl01
+        export APPD_SERVER_NAME
+
+		
+ 			sed -i '$ a\weblogic.StopScriptName=stopWebLogic.sh' /opt/fedex/genesis/gendom/current/usgendom/nodemanager/nodemanager.properties
+             sed -i '/^weblogic.StopScriptEnabled=/d' /opt/fedex/genesis/gendom/current/usgendom/nodemanager/nodemanager.properties && echo "weblogic.StopScriptEnabled=true" >> /opt/fedex/genesis/gendom/current/usgendom/nodemanager/nodemanager.properties
+            
+ 			#AppDynamics Script call:
+             if [[ -e /opt/appd/current/appagent/javaagent.jar ]]
+             then
+                 . /opt/appd/current/scripts/app_agent_appd.sh ${EAINUMBER}
+             fi
+             if [[ -e /opt/appd/current/machineagent/machineagent.jar ]]
+             then
+                 /opt/appd/current/scripts/machine_agent_appd.sh start
+             fi
+			
+            cd /opt/fedex/genesis/gendom/current/usgendom/bin/
+			./startWebLogic.sh noderby 1>/dev/null 2>&1 &
+			sleep 30
+			echo "KeyStores=CustomIdentityAndJavaStandardTrust" >> /opt/fedex/genesis/gendom/current/usgendom/nodemanager/nodemanager.properties
+            echo "CustomIdentityKeyStoreType=JKS" >> /opt/fedex/genesis/gendom/current/usgendom/nodemanager/nodemanager.properties
+            echo "CustomIdentityAlias=genusdoml3DR" >> /opt/fedex/genesis/gendom/current/usgendom/nodemanager/nodemanager.properties
+            echo "CustomIdentityPrivateKeyPassPhrase=genusdom@7353" >> /opt/fedex/genesis/gendom/current/usgendom/nodemanager/nodemanager.properties
+            echo "CustomIdentityKeyStoreFileName=/opt/fedex/genesis/gendom/current/cfg/genusdomL3DR.jks" >> /opt/fedex/genesis/gendom/current/usgendom/nodemanager/nodemanager.properties
+            echo "JavaStandardTrustKeystore=/opt/fedex/genesis/java8_current/jre/lib/security/cacerts" >> /opt/fedex/genesis/gendom/current/usgendom/nodemanager/nodemanager.properties
+            echo "JavaStandardTrustKeystoreType=jks" >> /opt/fedex/genesis/gendom/current/usgendom/nodemanager/nodemanager.properties
+			chmod -R 777 *
+			cd /opt/fedex/genesis/gendom/current/usgendom/nodemanager/
+			chmod -R 777 *
+			sed -i -e "s/ListenAddress=localhost/ListenAddress=gen-lvl3-us-dr-admin-atl01.test.cloud.fedex.com/g" /opt/fedex/genesis/gendom/current/usgendom/nodemanager/nodemanager.properties
+			#sed -i -e "s/SecureListener=true/SecureListener=false/g" /opt/fedex/genesis/gendom/current/usgendom/nodemanager/nodemanager.properties
+
+        fi
+		if [[ $HOST_PREFIX = u1060169 ]]
+		then
+			export GENDOMENV="L3DR"
+			USER_MEM_ARGS="-Xms1024m -Xmx1024m"
+			export USER_MEM_ARGS
+			APPD_SERVER_NAME=gen-lvl3-us-dr-gendom-atl01
+            export APPD_SERVER_NAME
+
+			cd /opt/fedex/genesis/gendom/current/usgendom/nodemanager/
+			chmod -R 777 *
+			echo "KeyStores=CustomIdentityAndJavaStandardTrust" >> /opt/fedex/genesis/gendom/current/usgendom/nodemanager/nodemanager.properties
+            echo "CustomIdentityKeyStoreType=JKS" >> /opt/fedex/genesis/gendom/current/usgendom/nodemanager/nodemanager.properties
+            echo "CustomIdentityAlias=genusdoml3DR" >> /opt/fedex/genesis/gendom/current/usgendom/nodemanager/nodemanager.properties
+            echo "CustomIdentityPrivateKeyPassPhrase=genusdom@7353" >> /opt/fedex/genesis/gendom/current/usgendom/nodemanager/nodemanager.properties
+            echo "CustomIdentityKeyStoreFileName=/opt/fedex/genesis/gendom/current/cfg/genusdomL3DR.jks" >> /opt/fedex/genesis/gendom/current/usgendom/nodemanager/nodemanager.properties
+            echo "JavaStandardTrustKeystore=/opt/fedex/genesis/java8_current/jre/lib/security/cacerts" >> /opt/fedex/genesis/gendom/current/usgendom/nodemanager/nodemanager.properties
+            echo "JavaStandardTrustKeystoreType=jks" >> /opt/fedex/genesis/gendom/current/usgendom/nodemanager/nodemanager.properties
+			
+			#sed -i -e "s/SecureListener=true/SecureListener=false/g" /opt/fedex/genesis/gendom/current/usgendom/nodemanager/nodemanager.properties
+ 			sed -i '$ a\weblogic.StopScriptName=stopWebLogic.sh' /opt/fedex/genesis/gendom/current/usgendom/nodemanager/nodemanager.properties
+             sed -i '/^weblogic.StopScriptEnabled=/d' /opt/fedex/genesis/gendom/current/usgendom/nodemanager/nodemanager.properties && echo "weblogic.StopScriptEnabled=true" >> /opt/fedex/genesis/gendom/current/usgendom/nodemanager/nodemanager.properties
+           
+			cd /opt/fedex/genesis/gendom/current/usgendom/servers/gendom11/security/
+			rm -rf boot.properties
+			echo "username=weblogic" > boot.properties
+			echo "password=WebLog1c$" >> boot.properties
+			chmod 775 /opt/fedex/genesis/gendom/current/usgendom/servers/gendom11/security/boot.properties
+			cd /opt/fedex/genesis/gendom/current/usgendom/bin/
+			chmod 777 /opt/fedex/genesis/gendom/current/usgendom/bin/L3-DR_gendom_node.py
+			/opt/weblogic/wl12214_230117/wlserver/common/bin/wlst.sh /opt/fedex/genesis/gendom/current/usgendom/bin/L3-DR_gendom_node.py
+			nohup ./startNodeManager.sh noderby 1>/dev/null 2>&1 & 
+			#./startNodeManager.sh &
+			sleep 10
+			 
+ 			#AppDynamics Script call:
+             if [[ -e /opt/appd/current/appagent/javaagent.jar ]]
+             then
+                 . /opt/appd/current/scripts/app_agent_appd.sh ${EAINUMBER}
+             fi
+             if [[ -e /opt/appd/current/machineagent/machineagent.jar ]]
+             then
+                 /opt/appd/current/scripts/machine_agent_appd.sh start
+             fi
+			
+			#nohup ./startManagedWebLogic.sh gendom11 t3s://u1059926.test.cloud.fedex.com:9902/ noderby 1>/dev/null 2>&1 &
+			nohup ./startManagedWebLogic.sh gendom11 t3s://gen-lvl3-us-dr-admin-atl01.test.cloud.fedex.com:9902/ -Dweblogic.security.SSL.trustedCAKeyStore=/opt/fedex/genesis/java8_current/jre/lib/security/cacerts \
+-Dweblogic.security.SSL.trustedCAKeyStoreType=JKS \ -Dweblogic.security.SSL.trustedCAKeyStorePassword=genusdom@7353 \ noderby 1>/dev/null 2>&1 &
+			sleep 10
+			ps -ef | grep java
+			
+		fi
+		if [[ $HOST_PREFIX = u1060168 ]]
+		then
+			export GENDOMENV="L3DR"
+			USER_MEM_ARGS="-Xms1024m -Xmx1024m"
+			export USER_MEM_ARGS
+			APPD_SERVER_NAME=gen-lvl3-us-dr-gendom-atl02
+            export APPD_SERVER_NAME
+
+			cd /opt/fedex/genesis/gendom/current/usgendom/nodemanager/
+			chmod -R 777 *
+			echo "KeyStores=CustomIdentityAndJavaStandardTrust" >> /opt/fedex/genesis/gendom/current/usgendom/nodemanager/nodemanager.properties
+            echo "CustomIdentityKeyStoreType=JKS" >> /opt/fedex/genesis/gendom/current/usgendom/nodemanager/nodemanager.properties
+            echo "CustomIdentityAlias=genusdoml3DR" >> /opt/fedex/genesis/gendom/current/usgendom/nodemanager/nodemanager.properties
+            echo "CustomIdentityPrivateKeyPassPhrase=genusdom@7353" >> /opt/fedex/genesis/gendom/current/usgendom/nodemanager/nodemanager.properties
+            echo "CustomIdentityKeyStoreFileName=/opt/fedex/genesis/gendom/current/cfg/genusdomL3DR.jks" >> /opt/fedex/genesis/gendom/current/usgendom/nodemanager/nodemanager.properties
+            echo "JavaStandardTrustKeystore=/opt/fedex/genesis/java8_current/jre/lib/security/cacerts" >> /opt/fedex/genesis/gendom/current/usgendom/nodemanager/nodemanager.properties
+            echo "JavaStandardTrustKeystoreType=jks" >> /opt/fedex/genesis/gendom/current/usgendom/nodemanager/nodemanager.properties
+			
+			#sed -i -e "s/SecureListener=true/SecureListener=false/g" /opt/fedex/genesis/gendom/current/usgendom/nodemanager/nodemanager.properties
+ 			sed -i '$ a\weblogic.StopScriptName=stopWebLogic.sh' /opt/fedex/genesis/gendom/current/usgendom/nodemanager/nodemanager.properties
+            sed -i '/^weblogic.StopScriptEnabled=/d' /opt/fedex/genesis/gendom/current/usgendom/nodemanager/nodemanager.properties && echo "weblogic.StopScriptEnabled=true" >> /opt/fedex/genesis/gendom/current/usgendom/nodemanager/nodemanager.properties
+            
+			cd /opt/fedex/genesis/gendom/current/usgendom/servers/gendom12/security/
+			rm -rf boot.properties
+			echo "username=weblogic" > boot.properties
+			echo "password=WebLog1c$" >> boot.properties
+			chmod 775 /opt/fedex/genesis/gendom/current/usgendom/servers/gendom12/security/boot.properties
+			#cd /opt/fedex/genesis/gendom/current/usgendom/config
+			#chmod 775 /opt/fedex/genesis/gendom/current/usgendom/config/config.xml
+			#sed -i -e "s/{AES256}17kz5e4Lea7OZ3gBqWvrTiSklA2/TrFaeCMK/KtvxrI=/genusdom@7353/g" /opt/fedex/genesis/gendom/current/usgendom/config/config.xml  
+			
+			cd /opt/fedex/genesis/gendom/current/usgendom/bin/
+			chmod 777 /opt/fedex/genesis/gendom/current/usgendom/bin/L3-DR_gendom_node.py
+			/opt/weblogic/wl12214_230117/wlserver/common/bin/wlst.sh /opt/fedex/genesis/gendom/current/usgendom/bin/L3-DR_gendom_node.py
+			nohup ./startNodeManager.sh noderby 1>/dev/null 2>&1 &
+			# ./startNodeManager.sh &
+			sleep 5
+			
+ 			#AppDynamics Script call:
+             if [[ -e /opt/appd/current/appagent/javaagent.jar ]]
+             then
+                 . /opt/appd/current/scripts/app_agent_appd.sh ${EAINUMBER}
+             fi
+             if [[ -e /opt/appd/current/machineagent/machineagent.jar ]]
+             then
+                 /opt/appd/current/scripts/machine_agent_appd.sh start
+             fi
+			
+			# ./startManagedWebLogic.sh gendom12 t3s://u1059926.test.cloud.fedex.com:9902/ noderby 1>/dev/null 2>&1 &
+			nohup ./startManagedWebLogic.sh gendom12 t3s://u1059926.test.cloud.fedex.com:9902/ -Dweblogic.security.SSL.trustedCAKeyStore=/opt/fedex/genesis/java8_current/jre/lib/security/cacerts \
+-Dweblogic.security.SSL.trustedCAKeyStoreType=JKS \ -Dweblogic.security.SSL.trustedCAKeyStorePassword=genusdom@7353\ noderby 1>/dev/null 2>&1 &
+			 sleep 10
+			 
+        fi
+        if [[ $HOST_PREFIX = u1060414 ]]
+        then
+			export GENDOMENV="L3DR"
+			USER_MEM_ARGS="-Xms1024m -Xmx1024m"
+			export USER_MEM_ARGS
+			APPD_SERVER_NAME=gen-lvl3-us-dr-gendom-atl03
+            export APPD_SERVER_NAME
+
+			cd /opt/fedex/genesis/gendom/current/usgendom/nodemanager/
+			chmod -R 777 *
+			echo "KeyStores=CustomIdentityAndJavaStandardTrust" >> /opt/fedex/genesis/gendom/current/usgendom/nodemanager/nodemanager.properties
+            echo "CustomIdentityKeyStoreType=JKS" >> /opt/fedex/genesis/gendom/current/usgendom/nodemanager/nodemanager.properties
+            echo "CustomIdentityAlias=genusdoml3DR" >> /opt/fedex/genesis/gendom/current/usgendom/nodemanager/nodemanager.properties
+            echo "CustomIdentityPrivateKeyPassPhrase=genusdom@7353" >> /opt/fedex/genesis/gendom/current/usgendom/nodemanager/nodemanager.properties
+            echo "CustomIdentityKeyStoreFileName=/opt/fedex/genesis/gendom/current/cfg/genusdomL3DR.jks" >> /opt/fedex/genesis/gendom/current/usgendom/nodemanager/nodemanager.properties
+            echo "JavaStandardTrustKeystore=/opt/fedex/genesis/java8_current/jre/lib/security/cacerts" >> /opt/fedex/genesis/gendom/current/usgendom/nodemanager/nodemanager.properties
+            echo "JavaStandardTrustKeystoreType=jks" >> /opt/fedex/genesis/gendom/current/usgendom/nodemanager/nodemanager.properties
+			
+			#sed -i -e "s/SecureListener=true/SecureListener=false/g" /opt/fedex/genesis/gendom/current/usgendom/nodemanager/nodemanager.properties
+ 			sed -i '$ a\weblogic.StopScriptName=stopWebLogic.sh' /opt/fedex/genesis/gendom/current/usgendom/nodemanager/nodemanager.properties
+             sed -i '/^weblogic.StopScriptEnabled=/d' /opt/fedex/genesis/gendom/current/usgendom/nodemanager/nodemanager.properties && echo "weblogic.StopScriptEnabled=true" >> /opt/fedex/genesis/gendom/current/usgendom/nodemanager/nodemanager.properties
+			
+			cd /opt/fedex/genesis/gendom/current/usgendom/servers/gendom13/security/
+			rm -rf boot.properties
+			echo "username=weblogic" > boot.properties
+			echo "password=WebLog1c$" >> boot.properties
+			chmod 775 /opt/fedex/genesis/gendom/current/usgendom/servers/gendom13/security/boot.properties
+            cd /opt/fedex/genesis/gendom/current/usgendom/bin/
+			chmod 777 /opt/fedex/genesis/gendom/current/usgendom/bin/L3-DR_gendom_node.py
+			/opt/weblogic/wl12214_230117/wlserver/common/bin/wlst.sh /opt/fedex/genesis/gendom/current/usgendom/bin/L3-DR_gendom_node.py
+			nohup ./startNodeManager.sh noderby 1>/dev/null 2>&1 &
+			# ./startNodeManager.sh &
+			sleep 5
+			
+ 			#AppDynamics Script call:
+             if [[ -e /opt/appd/current/appagent/javaagent.jar ]]
+             then
+                 . /opt/appd/current/scripts/app_agent_appd.sh ${EAINUMBER}
+             fi
+             if [[ -e /opt/appd/current/machineagent/machineagent.jar ]]
+             then
+                 /opt/appd/current/scripts/machine_agent_appd.sh start
+             fi
+            nohup ./startManagedWebLogic.sh gendom13 t3s://u1059926.test.cloud.fedex.com:9902/ -Dweblogic.security.SSL.trustedCAKeyStore=/opt/fedex/genesis/java8_current/jre/lib/security/cacerts \
+-Dweblogic.security.SSL.trustedCAKeyStoreType=JKS \ -Dweblogic.security.SSL.trustedCAKeyStorePassword=genusdom@7353 \ noderby 1>/dev/null 2>&1 &
+	    sleep 10
+			
+        fi	
+        if [[ $HOST_PREFIX = u1059987 ]]
+        then
+			export GENDOMENV="L3DR"
+			USER_MEM_ARGS="-Xms1024m -Xmx1024m"
+			export USER_MEM_ARGS
+			APPD_SERVER_NAME=gen-lvl3-us-dr-gendom-atl04
+            export APPD_SERVER_NAME
+
+			cd /opt/fedex/genesis/gendom/current/usgendom/nodemanager/
+			chmod -R 777 *
+			echo "KeyStores=CustomIdentityAndJavaStandardTrust" >> /opt/fedex/genesis/gendom/current/usgendom/nodemanager/nodemanager.properties
+            echo "CustomIdentityKeyStoreType=JKS" >> /opt/fedex/genesis/gendom/current/usgendom/nodemanager/nodemanager.properties
+            echo "CustomIdentityAlias=genusdoml3DR" >> /opt/fedex/genesis/gendom/current/usgendom/nodemanager/nodemanager.properties
+            echo "CustomIdentityPrivateKeyPassPhrase=genusdom@7353" >> /opt/fedex/genesis/gendom/current/usgendom/nodemanager/nodemanager.properties
+            echo "CustomIdentityKeyStoreFileName=/opt/fedex/genesis/gendom/current/cfg/genusdomL3DR.jks" >> /opt/fedex/genesis/gendom/current/usgendom/nodemanager/nodemanager.properties
+            echo "JavaStandardTrustKeystore=/opt/fedex/genesis/java8_current/jre/lib/security/cacerts" >> /opt/fedex/genesis/gendom/current/usgendom/nodemanager/nodemanager.properties
+            echo "JavaStandardTrustKeystoreType=jks" >> /opt/fedex/genesis/gendom/current/usgendom/nodemanager/nodemanager.properties
+			
+			#sed -i -e "s/SecureListener=true/SecureListener=false/g" /opt/fedex/genesis/gendom/current/usgendom/nodemanager/nodemanager.properties
+ 			sed -i '$ a\weblogic.StopScriptName=stopWebLogic.sh' /opt/fedex/genesis/gendom/current/usgendom/nodemanager/nodemanager.properties
+            sed -i '/^weblogic.StopScriptEnabled=/d' /opt/fedex/genesis/gendom/current/usgendom/nodemanager/nodemanager.properties && echo "weblogic.StopScriptEnabled=true" >> /opt/fedex/genesis/gendom/current/usgendom/nodemanager/nodemanager.properties
+          
+			cd /opt/fedex/genesis/gendom/current/usgendom/servers/gendom14/security/
+			rm -rf boot.properties
+			echo "username=weblogic" > boot.properties
+			echo "password=WebLog1c$" >> boot.properties
+			chmod 775 /opt/fedex/genesis/gendom/current/usgendom/servers/gendom14/security/boot.properties
+            cd /opt/fedex/genesis/gendom/current/usgendom/bin/
+			chmod 777 /opt/fedex/genesis/gendom/current/usgendom/bin/L3-DR_gendom_node.py
+			/opt/weblogic/wl12214_230117/wlserver/common/bin/wlst.sh /opt/fedex/genesis/gendom/current/usgendom/bin/L3-DR_gendom_node.py
+			nohup ./startNodeManager.sh noderby 1>/dev/null 2>&1 &
+			# ./startNodeManager.sh &
+			sleep 5
+			
+ 		 	#AppDynamics Script call:
+             if [[ -e /opt/appd/current/appagent/javaagent.jar ]]
+             then
+                 . /opt/appd/current/scripts/app_agent_appd.sh ${EAINUMBER}
+             fi
+             if [[ -e /opt/appd/current/machineagent/machineagent.jar ]]
+             then
+                 /opt/appd/current/scripts/machine_agent_appd.sh start
+             fi
+			
+			nohup ./startManagedWebLogic.sh gendom14 t3s://u1059926.test.cloud.fedex.com:9902/ -Dweblogic.security.SSL.trustedCAKeyStore=/opt/fedex/genesis/java8_current/jre/lib/security/cacerts \
+-Dweblogic.security.SSL.trustedCAKeyStoreType=JKS \ -Dweblogic.security.SSL.trustedCAKeyStorePassword=genusdom@7353 \ noderby 1>/dev/null 2>&1 &
+			sleep 10
+			
+        fi
+        if [[ $HOST_PREFIX = u1060171 ]]
+        then
+			export GENDOMENV="L3DR"
+			USER_MEM_ARGS="-Xms1024m -Xmx1024m"
+			export USER_MEM_ARGS
+			APPD_SERVER_NAME=gen-lvl3-us-dr-recog-atl01
+            export APPD_SERVER_NAME
+
+			cd /opt/fedex/genesis/genrecog/current/usgendom/nodemanager/
+			chmod -R 777 *
+			echo "KeyStores=CustomIdentityAndJavaStandardTrust" >> /opt/fedex/genesis/genrecog/current/usgendom/nodemanager/nodemanager.properties
+            echo "CustomIdentityKeyStoreType=JKS" >> /opt/fedex/genesis/genrecog/current/usgendom/nodemanager/nodemanager.properties
+            echo "CustomIdentityAlias=genusdoml3DR" >> /opt/fedex/genesis/genrecog/current/usgendom/nodemanager/nodemanager.properties
+            echo "CustomIdentityPrivateKeyPassPhrase=genusdom@7353" >> /opt/fedex/genesis/genrecog/current/usgendom/nodemanager/nodemanager.properties
+            echo "CustomIdentityKeyStoreFileName=/opt/fedex/genesis/genrecog/current/cfg/genusdomL3DR.jks" >> /opt/fedex/genesis/genrecog/current/usgendom/nodemanager/nodemanager.properties
+            echo "JavaStandardTrustKeystore=/opt/fedex/genesis/java8_current/jre/lib/security/cacerts" >> /opt/fedex/genesis/genrecog/current/usgendom/nodemanager/nodemanager.properties
+            echo "JavaStandardTrustKeystoreType=jks" >> /opt/fedex/genesis/genrecog/current/usgendom/nodemanager/nodemanager.properties
+			
+			#sed -i -e "s/SecureListener=true/SecureListener=false/g" /opt/fedex/genesis/genrecog/current/usgendom/nodemanager/nodemanager.properties
+			cd /opt/fedex/genesis/genrecog/current/usgendom/nodemanager/
+			chmod -R 777 *
+			#sed -i -e "s/SecureListener=true/SecureListener=false/g" /opt/fedex/genesis/genrecog/current/usgendom/nodemanager/nodemanager.properties
+ 			sed -i '$ a\weblogic.StopScriptName=stopWebLogic.sh' /opt/fedex/genesis/genrecog/current/usgendom/nodemanager/nodemanager.properties
+             sed -i '/^weblogic.StopScriptEnabled=/d' /opt/fedex/genesis/genrecog/current/usgendom/nodemanager/nodemanager.properties && echo "weblogic.StopScriptEnabled=true" >> /opt/fedex/genesis/genrecog/current/usgendom/nodemanager/nodemanager.properties
+            
+			cd /opt/fedex/genesis/genrecog/current/usgendom/servers/genrecog3/security/
+			rm -rf boot.properties
+			echo "username=weblogic" > boot.properties
+			echo "password=WebLog1c$" >> boot.properties
+			chmod 775 /opt/fedex/genesis/genrecog/current/usgendom/servers/genrecog3/security/boot.properties
+            cd /opt/fedex/genesis/genrecog/current/usgendom/bin/
+			chmod 777 /opt/fedex/genesis/genrecog/current/usgendom/bin/L3-DR_genrecog_node.py
+			/opt/weblogic/wl12214_230117/wlserver/common/bin/wlst.sh /opt/fedex/genesis/genrecog/current/usgendom/bin/L3-DR_genrecog_node.py
+			nohup ./startNodeManager.sh noderby 1>/dev/null 2>&1 &
+			# ./startNodeManager.sh &
+			sleep 5
+			
+ 			#AppDynamics Script call:
+             if [[ -e /opt/appd/current/appagent/javaagent.jar ]]
+             then
+                 . /opt/appd/current/scripts/app_agent_appd.sh ${EAINUMBER}
+             fi
+             if [[ -e /opt/appd/current/machineagent/machineagent.jar ]]
+             then
+                 /opt/appd/current/scripts/machine_agent_appd.sh start
+             fi
+			
+			nohup ./startManagedWebLogic.sh genrecog3 t3s://u1059926.test.cloud.fedex.com:9902/ -Dweblogic.security.SSL.trustedCAKeyStore=/opt/fedex/genesis/java8_current/jre/lib/security/cacerts \
+-Dweblogic.security.SSL.trustedCAKeyStoreType=JKS \ -Dweblogic.security.SSL.trustedCAKeyStorePassword=genusdom@7353 \ noderby 1>/dev/null 2>&1 &
+			sleep 10
+			
+        fi
+        if [[ $HOST_PREFIX = u1059991 ]]
+        then
+			export GENDOMENV="L3DR"
+			USER_MEM_ARGS="-Xms1024m -Xmx1024m"
+			export USER_MEM_ARGS
+			APPD_SERVER_NAME=gen-lvl3-us-dr-recog-atl02
+            export APPD_SERVER_NAME
+
+			cd /opt/fedex/genesis/genrecog/current/usgendom/nodemanager/
+			chmod -R 777 *
+			echo "KeyStores=CustomIdentityAndJavaStandardTrust" >> /opt/fedex/genesis/genrecog/current/usgendom/nodemanager/nodemanager.properties
+            echo "CustomIdentityKeyStoreType=JKS" >> /opt/fedex/genesis/genrecog/current/usgendom/nodemanager/nodemanager.properties
+            echo "CustomIdentityAlias=genusdoml3DR" >> /opt/fedex/genesis/genrecog/current/usgendom/nodemanager/nodemanager.properties
+            echo "CustomIdentityPrivateKeyPassPhrase=genusdom@7353" >> /opt/fedex/genesis/genrecog/current/usgendom/nodemanager/nodemanager.properties
+            echo "CustomIdentityKeyStoreFileName=/opt/fedex/genesis/genrecog/current/cfg/genusdomL3DR.jks" >> /opt/fedex/genesis/genrecog/current/usgendom/nodemanager/nodemanager.properties
+            echo "JavaStandardTrustKeystore=/opt/fedex/genesis/java8_current/jre/lib/security/cacerts" >> /opt/fedex/genesis/genrecog/current/usgendom/nodemanager/nodemanager.properties
+            echo "JavaStandardTrustKeystoreType=jks" >> /opt/fedex/genesis/genrecog/current/usgendom/nodemanager/nodemanager.properties
+			
+			#sed -i -e "s/SecureListener=true/SecureListener=false/g" /opt/fedex/genesis/genrecog/current/usgendom/nodemanager/nodemanager.properties
+ 			sed -i '$ a\weblogic.StopScriptName=stopWebLogic.sh' /opt/fedex/genesis/genrecog/current/usgendom/nodemanager/nodemanager.properties
+             sed -i '/^weblogic.StopScriptEnabled=/d' /opt/fedex/genesis/genrecog/current/usgendom/nodemanager/nodemanager.properties && echo "weblogic.StopScriptEnabled=true" >> /opt/fedex/genesis/genrecog/current/usgendom/nodemanager/nodemanager.properties
+	
+			cd /opt/fedex/genesis/genrecog/current/usgendom/servers/genrecog4/security/
+			rm -rf boot.properties
+			echo "username=weblogic" > boot.properties
+			echo "password=WebLog1c$" >> boot.properties
+			chmod 775 /opt/fedex/genesis/genrecog/current/usgendom/servers/genrecog4/security/boot.properties
+            cd /opt/fedex/genesis/genrecog/current/usgendom/bin/
+			chmod 777 /opt/fedex/genesis/genrecog/current/usgendom/bin/L3-DR_genrecog_node.py
+			#/opt/weblogic/wl12214_230117/wlserver/common/bin/wlst.sh /opt/fedex/genesis/genrecog/current/usgendom/bin/L3-DR_genrecog_node.py
+			nohup ./startNodeManager.sh noderby 1>/dev/null 2>&1 &
+			# ./startNodeManager.sh &
+			sleep 5
+			
+ 			#AppDynamics Script call:
+             if [[ -e /opt/appd/current/appagent/javaagent.jar ]]
+             then
+                 . /opt/appd/current/scripts/app_agent_appd.sh ${EAINUMBER}
+             fi
+             if [[ -e /opt/appd/current/machineagent/machineagent.jar ]]
+             then
+                 /opt/appd/current/scripts/machine_agent_appd.sh start
+             fi
+           nohup  ./startManagedWebLogic.sh genrecog4 t3s://u1059926.test.cloud.fedex.com:9902/ -Dweblogic.security.SSL.trustedCAKeyStore=/opt/fedex/genesis/java8_current/jre/lib/security/cacerts \
+-Dweblogic.security.SSL.trustedCAKeyStoreType=JKS \ -Dweblogic.security.SSL.trustedCAKeyStorePassword=genusdom@7353 \ noderby 1>/dev/null 2>&1 &
+	   sleep 10
+        fi
+		
+#------------------------------------------------ L2 env --------------------------------		
+		if [[ $HOST_PREFIX = u1051550 ]]
+        then
+			export GENDOMENV="L2"
+			usgendom_PROPERTIES="${usgendom_PROPERTIES_SSL_IGNORE} ${usgendom_PROPERTIES_DATA_TRANSFER} ${usgendom_PROPERTIES_IP4STACK} ${usgendom_PROPERTIES_WSEE_WSTX_WSAT} ${usgendom_PROPERTIES_SSL_PROTOCOL} ${usgendom_PROPERTIES_SECURITY_PROPS}"
+        
+        export usgendom_PROPERTIES
+		
+			sed -i '$ a\weblogic.StopScriptName=stopWebLogic.sh' /opt/fedex/genesis/gendom/current/usgendom/nodemanager/nodemanager.properties
+            sed -i '/^weblogic.StopScriptEnabled=/d' /opt/fedex/genesis/gendom/current/usgendom/nodemanager/nodemanager.properties && echo "weblogic.StopScriptEnabled=true" >> /opt/fedex/genesis/gendom/current/usgendom/nodemanager/nodemanager.properties
+            cd /opt/fedex/genesis/gendom/current/usgendom/bin/
+			./startWebLogic.sh noderby 1>/dev/null 2>&1 &
+			sleep 30
+	#		echo "KeyStores=CustomIdentityAndJavaStandardTrust" >> /opt/fedex/genesis/gendom/current/usgendom/nodemanager/nodemanager.properties
+         #   echo "CustomIdentityKeyStoreType=JKS" >> /opt/fedex/genesis/gendom/current/usgendom/nodemanager/nodemanager.properties
+         #  echo "CustomIdentityAlias=genusdomL2" >> /opt/fedex/genesis/gendom/current/usgendom/nodemanager/nodemanager.properties
+         #   echo "CustomIdentityPrivateKeyPassPhrase=genusdom@7353" >> /opt/fedex/genesis/gendom/current/usgendom/nodemanager/nodemanager.properties
+         #   echo "CustomIdentityKeyStoreFileName=/opt/fedex/genesis/gendom/current/cfg/genusdomL2.jks" >> /opt/fedex/genesis/gendom/current/usgendom/nodemanager/nodemanager.properties
+         #   echo "JavaStandardTrustKeystore=/opt/fedex/genesis/java8_current/jre/lib/security/cacerts" >> /opt/fedex/genesis/gendom/current/usgendom/nodemanager/nodemanager.properties
+         #   echo "JavaStandardTrustKeystoreType=jks" >> /opt/fedex/genesis/gendom/current/usgendom/nodemanager/nodemanager.properties
+			chmod -R 777 *
+			cd /opt/fedex/genesis/gendom/current/usgendom/nodemanager/
+			chmod -R 777 *
+			sed -i -e "s/ListenAddress=localhost/ListenAddress=gen-lvl2-us-admin-las01.test.cloud.fedex.com/g" /opt/fedex/genesis/gendom/current/usgendom/nodemanager/nodemanager.properties
+			sed -i -e "s/SecureListener=true/SecureListener=false/g" /opt/fedex/genesis/gendom/current/usgendom/nodemanager/nodemanager.properties
+
+        fi
+		if [[ $HOST_PREFIX = u1051291 ]]
+		then
+			export GENDOMENV="L2"
+			USER_MEM_ARGS="-Xms768m -Xmx768m"
+			export USER_MEM_ARGS
+			cd /opt/fedex/genesis/gendom/current/usgendom/nodemanager/
+			chmod -R 777 *
+			echo "KeyStores=CustomIdentityAndJavaStandardTrust" >> /opt/fedex/genesis/gendom/current/usgendom/nodemanager/nodemanager.properties
+            echo "CustomIdentityKeyStoreType=JKS" >> /opt/fedex/genesis/gendom/current/usgendom/nodemanager/nodemanager.properties
+            echo "CustomIdentityAlias=genusdomL2" >> /opt/fedex/genesis/gendom/current/usgendom/nodemanager/nodemanager.properties
+            echo "CustomIdentityPrivateKeyPassPhrase=genusdom@7353" >> /opt/fedex/genesis/gendom/current/usgendom/nodemanager/nodemanager.properties
+            echo "CustomIdentityKeyStoreFileName=/opt/fedex/genesis/gendom/current/cfg/genusdomL2.jks" >> /opt/fedex/genesis/gendom/current/usgendom/nodemanager/nodemanager.properties
+            echo "JavaStandardTrustKeystore=/opt/fedex/genesis/java8_current/jre/lib/security/cacerts" >> /opt/fedex/genesis/gendom/current/usgendom/nodemanager/nodemanager.properties
+            echo "JavaStandardTrustKeystoreType=jks" >> /opt/fedex/genesis/gendom/current/usgendom/nodemanager/nodemanager.properties
+			
+			#sed -i -e "s/SecureListener=true/SecureListener=false/g" /opt/fedex/genesis/gendom/current/usgendom/nodemanager/nodemanager.properties
+			sed -i '$ a\weblogic.StopScriptName=stopWebLogic.sh' /opt/fedex/genesis/gendom/current/usgendom/nodemanager/nodemanager.properties
+            sed -i '/^weblogic.StopScriptEnabled=/d' /opt/fedex/genesis/gendom/current/usgendom/nodemanager/nodemanager.properties && echo "weblogic.StopScriptEnabled=true" >> /opt/fedex/genesis/gendom/current/usgendom/nodemanager/nodemanager.properties
+			cd /opt/fedex/genesis/gendom/current/usgendom/servers/gendom11/security/
+			rm -rf boot.properties
+			echo "username=weblogic" > boot.properties
+			echo "password=WebLog1c$" >> boot.properties
+			chmod 775 /opt/fedex/genesis/gendom/current/usgendom/servers/gendom11/security/boot.properties
+			cd /opt/fedex/genesis/gendom/current/usgendom/bin/
+			nohup ./startNodeManager.sh noderby 1>/dev/null 2>&1 & 
+			#./startNodeManager.sh &
+			sleep 10
+			#nohup ./startManagedWebLogic.sh gendom11 t3s://u1051550.test.cloud.fedex.com:9902/ noderby 1>/dev/null 2>&1 &
+			nohup ./startManagedWebLogic.sh gendom11 t3s://u1051550.test.cloud.fedex.com:9902/ -Dweblogic.security.SSL.trustedCAKeyStore=/opt/fedex/genesis/java8_current/jre/lib/security/cacerts  -Dweblogic.security.SSL.trustedCAKeyStoreType=JKS  -Dweblogic.security.SSL.trustedCAKeyStorePassword=genusdom@7353 noderby 1>/dev/null 2>&1 &
+			sleep 10
+			ps -ef | grep java
+			
+		fi
+		if [[ $HOST_PREFIX = u1051292 ]]
+		then
+			export GENDOMENV="L2"
+			USER_MEM_ARGS="-Xms768m -Xmx768m"
+			export USER_MEM_ARGS
+			cd /opt/fedex/genesis/gendom/current/usgendom/nodemanager/
+			chmod -R 777 *
+			echo "KeyStores=CustomIdentityAndJavaStandardTrust" >> /opt/fedex/genesis/gendom/current/usgendom/nodemanager/nodemanager.properties
+            echo "CustomIdentityKeyStoreType=JKS" >> /opt/fedex/genesis/gendom/current/usgendom/nodemanager/nodemanager.properties
+            echo "CustomIdentityAlias=genusdomL2" >> /opt/fedex/genesis/gendom/current/usgendom/nodemanager/nodemanager.properties
+            echo "CustomIdentityPrivateKeyPassPhrase=genusdom@7353" >> /opt/fedex/genesis/gendom/current/usgendom/nodemanager/nodemanager.properties
+            echo "CustomIdentityKeyStoreFileName=/opt/fedex/genesis/gendom/current/cfg/genusdomL2.jks" >> /opt/fedex/genesis/gendom/current/usgendom/nodemanager/nodemanager.properties
+            echo "JavaStandardTrustKeystore=/opt/fedex/genesis/java8_current/jre/lib/security/cacerts" >> /opt/fedex/genesis/gendom/current/usgendom/nodemanager/nodemanager.properties
+            echo "JavaStandardTrustKeystoreType=jks" >> /opt/fedex/genesis/gendom/current/usgendom/nodemanager/nodemanager.properties
+			
+			#sed -i -e "s/SecureListener=true/SecureListener=false/g" /opt/fedex/genesis/gendom/current/usgendom/nodemanager/nodemanager.properties
+			sed -i '$ a\weblogic.StopScriptName=stopWebLogic.sh' /opt/fedex/genesis/gendom/current/usgendom/nodemanager/nodemanager.properties
+            sed -i '/^weblogic.StopScriptEnabled=/d' /opt/fedex/genesis/gendom/current/usgendom/nodemanager/nodemanager.properties && echo "weblogic.StopScriptEnabled=true" >> /opt/fedex/genesis/gendom/current/usgendom/nodemanager/nodemanager.properties
+			cd /opt/fedex/genesis/gendom/current/usgendom/servers/gendom12/security/
+			rm -rf boot.properties
+			echo "username=weblogic" > boot.properties
+			echo "password=WebLog1c$" >> boot.properties
+			chmod 775 /opt/fedex/genesis/gendom/current/usgendom/servers/gendom12/security/boot.properties
+			#cd /opt/fedex/genesis/gendom/current/usgendom/config
+			#chmod 775 /opt/fedex/genesis/gendom/current/usgendom/config/config.xml
+			#sed -i -e "s/{AES256}17kz5e4Lea7OZ3gBqWvrTiSklA2/TrFaeCMK/KtvxrI=/genusdom@7353/g" /opt/fedex/genesis/gendom/current/usgendom/config/config.xml  
+			
+			cd /opt/fedex/genesis/gendom/current/usgendom/bin/
+			nohup ./startNodeManager.sh noderby 1>/dev/null 2>&1 &
+			# ./startNodeManager.sh &
+			sleep 5
+			# ./startManagedWebLogic.sh gendom12 t3s://u1051550.test.cloud.fedex.com:9902/ noderby 1>/dev/null 2>&1 &
+			nohup ./startManagedWebLogic.sh gendom12 t3s://u1051550.test.cloud.fedex.com:9902/ -Dweblogic.security.SSL.trustedCAKeyStore=/opt/fedex/genesis/java8_current/jre/lib/security/cacerts  -Dweblogic.security.SSL.trustedCAKeyStoreType=JKS  -Dweblogic.security.SSL.trustedCAKeyStorePassword=genusdom@7353 noderby 1>/dev/null 2>&1 &
+			 sleep 10
+			 
+        fi
+      
+        if [[ $HOST_PREFIX = u1051661 ]]
+        then
+			export GENDOMENV="L2"
+			USER_MEM_ARGS="-Xms768m -Xmx768m"
+			export USER_MEM_ARGS
+			cd /opt/fedex/genesis/genrecog/current/usgendom/nodemanager/
+			chmod -R 777 *
+			echo "KeyStores=CustomIdentityAndJavaStandardTrust" >> /opt/fedex/genesis/genrecog/current/usgendom/nodemanager/nodemanager.properties
+            echo "CustomIdentityKeyStoreType=JKS" >> /opt/fedex/genesis/genrecog/current/usgendom/nodemanager/nodemanager.properties
+            echo "CustomIdentityAlias=genusdomL2" >> /opt/fedex/genesis/genrecog/current/usgendom/nodemanager/nodemanager.properties
+            echo "CustomIdentityPrivateKeyPassPhrase=genusdom@7353" >> /opt/fedex/genesis/genrecog/current/usgendom/nodemanager/nodemanager.properties
+            echo "CustomIdentityKeyStoreFileName=/opt/fedex/genesis/genrecog/current/cfg/genusdomL2.jks" >> /opt/fedex/genesis/genrecog/current/usgendom/nodemanager/nodemanager.properties
+            echo "JavaStandardTrustKeystore=/opt/fedex/genesis/java8_current/jre/lib/security/cacerts" >> /opt/fedex/genesis/genrecog/current/usgendom/nodemanager/nodemanager.properties
+            echo "JavaStandardTrustKeystoreType=jks" >> /opt/fedex/genesis/genrecog/current/usgendom/nodemanager/nodemanager.properties
+			
+			#sed -i -e "s/SecureListener=true/SecureListener=false/g" /opt/fedex/genesis/genrecog/current/usgendom/nodemanager/nodemanager.properties
+			sed -i '$ a\weblogic.StopScriptName=stopWebLogic.sh' /opt/fedex/genesis/genrecog/current/usgendom/nodemanager/nodemanager.properties
+            sed -i '/^weblogic.StopScriptEnabled=/d' /opt/fedex/genesis/genrecog/current/usgendom/nodemanager/nodemanager.properties && echo "weblogic.StopScriptEnabled=true" >> /opt/fedex/genesis/genrecog/current/usgendom/nodemanager/nodemanager.properties
+			cd /opt/fedex/genesis/genrecog/current/usgendom/servers/genrecog4/security/
+			rm -rf boot.properties
+			echo "username=weblogic" > boot.properties
+			echo "password=WebLog1c$" >> boot.properties
+			chmod 775 /opt/fedex/genesis/genrecog/current/usgendom/servers/genrecog4/security/boot.properties
+            cd /opt/fedex/genesis/genrecog/current/usgendom/bin/
+			nohup ./startNodeManager.sh noderby 1>/dev/null 2>&1 &
+			# ./startNodeManager.sh &
+			sleep 5
+           nohup  ./startManagedWebLogic.sh genrecog4 t3s://u1051550.test.cloud.fedex.com:9902/ -Dweblogic.security.SSL.trustedCAKeyStore=/opt/fedex/genesis/java8_current/jre/lib/security/cacerts  -Dweblogic.security.SSL.trustedCAKeyStoreType=JKS  -Dweblogic.security.SSL.trustedCAKeyStorePassword=genusdom@7353  noderby 1>/dev/null 2>&1 &
+	   sleep 10
+        fi
+		
+#----------------------------------- L4 env -----------------------------------
+
+		if [[ $HOST_PREFIX = u1052262 ]]
+        then
+			export GENDOMENV="L4"
+			usgendom_PROPERTIES="${usgendom_PROPERTIES_SSL_IGNORE} ${usgendom_PROPERTIES_DATA_TRANSFER} ${usgendom_PROPERTIES_IP4STACK} ${usgendom_PROPERTIES_WSEE_WSTX_WSAT} ${usgendom_PROPERTIES_SSL_PROTOCOL} ${usgendom_PROPERTIES_SECURITY_PROPS}"
+        
+        export usgendom_PROPERTIES
+			sed -i '$ a\weblogic.StopScriptName=stopWebLogic.sh' /opt/fedex/genesis/gendom/current/usgendom/nodemanager/nodemanager.properties
+            sed -i '/^weblogic.StopScriptEnabled=/d' /opt/fedex/genesis/gendom/current/usgendom/nodemanager/nodemanager.properties && echo "weblogic.StopScriptEnabled=true" >> /opt/fedex/genesis/gendom/current/usgendom/nodemanager/nodemanager.properties
+            cd /opt/fedex/genesis/gendom/current/usgendom/bin/
+			./startWebLogic.sh noderby 1>/dev/null 2>&1 &
+			sleep 30
+			echo "KeyStores=CustomIdentityAndJavaStandardTrust" >> /opt/fedex/genesis/gendom/current/usgendom/nodemanager/nodemanager.properties
+            echo "CustomIdentityKeyStoreType=JKS" >> /opt/fedex/genesis/gendom/current/usgendom/nodemanager/nodemanager.properties
+            echo "CustomIdentityAlias=genusdomL4" >> /opt/fedex/genesis/gendom/current/usgendom/nodemanager/nodemanager.properties
+            echo "CustomIdentityPrivateKeyPassPhrase=genusdom@7353" >> /opt/fedex/genesis/gendom/current/usgendom/nodemanager/nodemanager.properties
+            echo "CustomIdentityKeyStoreFileName=/opt/fedex/genesis/gendom/current/cfg/genusdomL4.jks" >> /opt/fedex/genesis/gendom/current/usgendom/nodemanager/nodemanager.properties
+            echo "JavaStandardTrustKeystore=/opt/fedex/genesis/java8_current/jre/lib/security/cacerts" >> /opt/fedex/genesis/gendom/current/usgendom/nodemanager/nodemanager.properties
+            echo "JavaStandardTrustKeystoreType=jks" >> /opt/fedex/genesis/gendom/current/usgendom/nodemanager/nodemanager.properties
+			chmod -R 777 *
+			cd /opt/fedex/genesis/gendom/current/usgendom/nodemanager/
+			chmod -R 777 *
+			sed -i -e "s/ListenAddress=localhost/ListenAddress=gen-lvl4-us-admin-las01.test.cloud.fedex.com/g" /opt/fedex/genesis/gendom/current/usgendom/nodemanager/nodemanager.properties
+			#sed -i -e "s/SecureListener=true/SecureListener=false/g" /opt/fedex/genesis/gendom/current/usgendom/nodemanager/nodemanager.properties
+
+        fi
+		if [[ $HOST_PREFIX = u1061499 ]]
+		then
+			export GENDOMENV="L4"
+			USER_MEM_ARGS="-Xms768m -Xmx768m"
+			export USER_MEM_ARGS
+			cd /opt/fedex/genesis/gendom/current/usgendom/nodemanager/
+			chmod -R 777 *
+			echo "KeyStores=CustomIdentityAndJavaStandardTrust" >> /opt/fedex/genesis/gendom/current/usgendom/nodemanager/nodemanager.properties
+            echo "CustomIdentityKeyStoreType=JKS" >> /opt/fedex/genesis/gendom/current/usgendom/nodemanager/nodemanager.properties
+            echo "CustomIdentityAlias=genusdomL4" >> /opt/fedex/genesis/gendom/current/usgendom/nodemanager/nodemanager.properties
+            echo "CustomIdentityPrivateKeyPassPhrase=genusdom@7353" >> /opt/fedex/genesis/gendom/current/usgendom/nodemanager/nodemanager.properties
+            echo "CustomIdentityKeyStoreFileName=/opt/fedex/genesis/gendom/current/cfg/genusdomL4.jks" >> /opt/fedex/genesis/gendom/current/usgendom/nodemanager/nodemanager.properties
+            echo "JavaStandardTrustKeystore=/opt/fedex/genesis/java8_current/jre/lib/security/cacerts" >> /opt/fedex/genesis/gendom/current/usgendom/nodemanager/nodemanager.properties
+            echo "JavaStandardTrustKeystoreType=jks" >> /opt/fedex/genesis/gendom/current/usgendom/nodemanager/nodemanager.properties
+			
+			#sed -i -e "s/SecureListener=true/SecureListener=false/g" /opt/fedex/genesis/gendom/current/usgendom/nodemanager/nodemanager.properties
+			sed -i '$ a\weblogic.StopScriptName=stopWebLogic.sh' /opt/fedex/genesis/gendom/current/usgendom/nodemanager/nodemanager.properties
+            sed -i '/^weblogic.StopScriptEnabled=/d' /opt/fedex/genesis/gendom/current/usgendom/nodemanager/nodemanager.properties && echo "weblogic.StopScriptEnabled=true" >> /opt/fedex/genesis/gendom/current/usgendom/nodemanager/nodemanager.properties
+			cd /opt/fedex/genesis/gendom/current/usgendom/servers/gendom11/security/
+			rm -rf boot.properties
+			echo "username=weblogic" > boot.properties
+			echo "password=WebLog1c$" >> boot.properties
+			chmod 775 /opt/fedex/genesis/gendom/current/usgendom/servers/gendom11/security/boot.properties
+			cd /opt/fedex/genesis/gendom/current/usgendom/bin/
+			nohup ./startNodeManager.sh noderby 1>/dev/null 2>&1 & 
+			#./startNodeManager.sh &
+			sleep 10
+			#nohup ./startManagedWebLogic.sh gendom11 t3s://u1052262.test.cloud.fedex.com:9902/ noderby 1>/dev/null 2>&1 &
+			nohup ./startManagedWebLogic.sh gendom11 t3s://u1052262.test.cloud.fedex.com:9902/ -Dweblogic.security.SSL.trustedCAKeyStore=/opt/fedex/genesis/java8_current/jre/lib/security/cacerts \
+-Dweblogic.security.SSL.trustedCAKeyStoreType=JKS \ -Dweblogic.security.SSL.trustedCAKeyStorePassword=genusdom@7353 \ noderby 1>/dev/null 2>&1 &
+			sleep 10
+			ps -ef | grep java
+			
+		fi
+		if [[ $HOST_PREFIX = u1061498 ]]
+		then
+			export GENDOMENV="L4"
+			USER_MEM_ARGS="-Xms768m -Xmx768m"
+			export USER_MEM_ARGS
+			cd /opt/fedex/genesis/gendom/current/usgendom/nodemanager/
+			chmod -R 777 *
+			echo "KeyStores=CustomIdentityAndJavaStandardTrust" >> /opt/fedex/genesis/gendom/current/usgendom/nodemanager/nodemanager.properties
+            echo "CustomIdentityKeyStoreType=JKS" >> /opt/fedex/genesis/gendom/current/usgendom/nodemanager/nodemanager.properties
+            echo "CustomIdentityAlias=genusdomL4" >> /opt/fedex/genesis/gendom/current/usgendom/nodemanager/nodemanager.properties
+            echo "CustomIdentityPrivateKeyPassPhrase=genusdom@7353" >> /opt/fedex/genesis/gendom/current/usgendom/nodemanager/nodemanager.properties
+            echo "CustomIdentityKeyStoreFileName=/opt/fedex/genesis/gendom/current/cfg/genusdomL4.jks" >> /opt/fedex/genesis/gendom/current/usgendom/nodemanager/nodemanager.properties
+            echo "JavaStandardTrustKeystore=/opt/fedex/genesis/java8_current/jre/lib/security/cacerts" >> /opt/fedex/genesis/gendom/current/usgendom/nodemanager/nodemanager.properties
+            echo "JavaStandardTrustKeystoreType=jks" >> /opt/fedex/genesis/gendom/current/usgendom/nodemanager/nodemanager.properties
+			
+			#sed -i -e "s/SecureListener=true/SecureListener=false/g" /opt/fedex/genesis/gendom/current/usgendom/nodemanager/nodemanager.properties
+			sed -i '$ a\weblogic.StopScriptName=stopWebLogic.sh' /opt/fedex/genesis/gendom/current/usgendom/nodemanager/nodemanager.properties
+            sed -i '/^weblogic.StopScriptEnabled=/d' /opt/fedex/genesis/gendom/current/usgendom/nodemanager/nodemanager.properties && echo "weblogic.StopScriptEnabled=true" >> /opt/fedex/genesis/gendom/current/usgendom/nodemanager/nodemanager.properties
+			cd /opt/fedex/genesis/gendom/current/usgendom/servers/gendom12/security/
+			rm -rf boot.properties
+			echo "username=weblogic" > boot.properties
+			echo "password=WebLog1c$" >> boot.properties
+			chmod 775 /opt/fedex/genesis/gendom/current/usgendom/servers/gendom12/security/boot.properties
+			#cd /opt/fedex/genesis/gendom/current/usgendom/config
+			#chmod 775 /opt/fedex/genesis/gendom/current/usgendom/config/config.xml
+			#sed -i -e "s/{AES256}17kz5e4Lea7OZ3gBqWvrTiSklA2/TrFaeCMK/KtvxrI=/genusdom@7353/g" /opt/fedex/genesis/gendom/current/usgendom/config/config.xml  
+			
+			cd /opt/fedex/genesis/gendom/current/usgendom/bin/
+			nohup ./startNodeManager.sh noderby 1>/dev/null 2>&1 &
+			# ./startNodeManager.sh &
+			sleep 5
+			# ./startManagedWebLogic.sh gendom12 t3s://u1052262.test.cloud.fedex.com:9902/ noderby 1>/dev/null 2>&1 &
+			nohup ./startManagedWebLogic.sh gendom12 t3s://u1052262.test.cloud.fedex.com:9902/ -Dweblogic.security.SSL.trustedCAKeyStore=/opt/fedex/genesis/java8_current/jre/lib/security/cacerts \
+-Dweblogic.security.SSL.trustedCAKeyStoreType=JKS \ -Dweblogic.security.SSL.trustedCAKeyStorePassword=genusdom@7353\ noderby 1>/dev/null 2>&1 &
+			 sleep 10
+			 
+        fi
+      
+        if [[ $HOST_PREFIX = u1061568 ]]
+        then
+			export GENDOMENV="L4"
+			USER_MEM_ARGS="-Xms768m -Xmx768m"
+			export USER_MEM_ARGS
+			cd /opt/fedex/genesis/genrecog/current/usgendom/nodemanager/
+			chmod -R 777 *
+			echo "KeyStores=CustomIdentityAndJavaStandardTrust" >> /opt/fedex/genesis/genrecog/current/usgendom/nodemanager/nodemanager.properties
+            echo "CustomIdentityKeyStoreType=JKS" >> /opt/fedex/genesis/genrecog/current/usgendom/nodemanager/nodemanager.properties
+            echo "CustomIdentityAlias=genusdomL4" >> /opt/fedex/genesis/genrecog/current/usgendom/nodemanager/nodemanager.properties
+            echo "CustomIdentityPrivateKeyPassPhrase=genusdom@7353" >> /opt/fedex/genesis/genrecog/current/usgendom/nodemanager/nodemanager.properties
+            echo "CustomIdentityKeyStoreFileName=/opt/fedex/genesis/genrecog/current/cfg/genusdomL4.jks" >> /opt/fedex/genesis/genrecog/current/usgendom/nodemanager/nodemanager.properties
+            echo "JavaStandardTrustKeystore=/opt/fedex/genesis/java8_current/jre/lib/security/cacerts" >> /opt/fedex/genesis/genrecog/current/usgendom/nodemanager/nodemanager.properties
+            echo "JavaStandardTrustKeystoreType=jks" >> /opt/fedex/genesis/genrecog/current/usgendom/nodemanager/nodemanager.properties
+			
+			#sed -i -e "s/SecureListener=true/SecureListener=false/g" /opt/fedex/genesis/genrecog/current/usgendom/nodemanager/nodemanager.properties
+			sed -i '$ a\weblogic.StopScriptName=stopWebLogic.sh' /opt/fedex/genesis/genrecog/current/usgendom/nodemanager/nodemanager.properties
+            sed -i '/^weblogic.StopScriptEnabled=/d' /opt/fedex/genesis/genrecog/current/usgendom/nodemanager/nodemanager.properties && echo "weblogic.StopScriptEnabled=true" >> /opt/fedex/genesis/genrecog/current/usgendom/nodemanager/nodemanager.properties
+			cd /opt/fedex/genesis/genrecog/current/usgendom/servers/genrecog4/security/
+			rm -rf boot.properties
+			echo "username=weblogic" > boot.properties
+			echo "password=WebLog1c$" >> boot.properties
+			chmod 775 /opt/fedex/genesis/genrecog/current/usgendom/servers/genrecog4/security/boot.properties
+            cd /opt/fedex/genesis/genrecog/current/usgendom/bin/
+			nohup ./startNodeManager.sh noderby 1>/dev/null 2>&1 &
+			# ./startNodeManager.sh &
+			sleep 5
+           nohup  ./startManagedWebLogic.sh genrecog4 t3s://u1052262.test.cloud.fedex.com:9902/ -Dweblogic.security.SSL.trustedCAKeyStore=/opt/fedex/genesis/java8_current/jre/lib/security/cacerts \
+-Dweblogic.security.SSL.trustedCAKeyStoreType=JKS \ -Dweblogic.security.SSL.trustedCAKeyStorePassword=genusdom@7353 \ noderby 1>/dev/null 2>&1 &
+	   sleep 10
+        fi
+    ;;     
+    *)
+        echo "Unknown network address - Exiting"
+        exit 1
+    ;;
+esac
+
+********************************************************************************************************************************
+stop.sh#!/bin/bash
+
+###########################################################################
+## stop Servers
+###########################################################################
+EAINUMBER=7353
+export EAINUMBER
+#DOMAIN_HOME=/opt/fedex/genesis/gendom/current/usgendom/bin/
+
+HOSTNAME=`hostname`
+HOST_PREFIX=`echo $HOSTNAME | cut -c1-8`
+case $HOST_PREFIX in
+
+	'u1051550'|'u1051291'|'u1051292'|'u1051661'|'u1062546'|'u1064310'|'u1064309'|'u1064311'|'u1064312'|'u1064637'|'u1064638'|'u1059926'|'u1060169'|'u1060168'|'u1060414'|'u1059987'|'u1060171'|'u1059991'|'u1052262'|'u1061499'|'u1061498'|'u1061568')
+    
+    	if [[ $HOST_PREFIX = u1051291 ]]
+	then
+			PID=$(ps aux | grep [w]eblogic.Server | awk '{print $2}')
+			#Check if the PID is empty
+			if [[ -z "$PID" ]]; then
+			     echo "Weblogic is not running!"
+			else
+			     echo "Weblogic is running with PID: $PID"
+			     export GENDOMENV="L2"
+          		 cd /opt/fedex/genesis/gendom/current/usgendom/bin/
+			     ./stopManagedWebLogic.sh gendom11 t3s://u1051550.test.cloud.fedex.com:9902/
+			     ./stopNodeManager.sh
+			    PID=$(ps aux | grep [j]ava | awk '{print $2}')
+			     #Check if the ManagedServer is stopped, else kill it
+			     if [[ -z "$PID" ]]; then
+			          echo "ManagedServer is Stopped"
+			     else
+			          echo "ManagedServer is still running with PID: $PID"
+			          echo "Stopping ManagedServer ..."
+				  kill -9 $PID
+			     fi
+			fi
+        fi
+	if [[ $HOST_PREFIX = u1051292 ]]
+	then
+			PID=$(ps aux | grep [w]eblogic.Server | awk '{print $2}')
+			#Check if the PID is empty
+			if [[ -z "$PID" ]]; then
+			     echo "Weblogic is not running!"
+			else
+			     echo "Weblogic is running with PID: $PID"
+			     export GENDOMENV="L2"
+          		     cd /opt/fedex/genesis/gendom/current/usgendom/bin/
+			     ./stopManagedWebLogic.sh gendom12 t3s://u1051550.test.cloud.fedex.com:9902/
+			     ./stopNodeManager.sh
+			     PID=$(ps aux | grep [j]ava | awk '{print $2}')
+			     #Check if the ManagedServer is stopped, else kill it
+			     if [[ -z "$PID" ]]; then
+			          echo "ManagedServer is Stopped"
+			     else
+			          echo "ManagedServer is still running with PID: $PID"
+			          echo "Stopping ManagedServer..."
+				  kill -9 $PID
+			     fi
+			fi
+        fi
+	if [[ $HOST_PREFIX = u1051661 ]]
+	then
+			PID=$(ps aux | grep [w]eblogic.Server | awk '{print $2}')
+			#Check if the PID is empty
+			if [[ -z "$PID" ]]; then
+			     echo "Weblogic is not running!"
+			else
+			     echo "Weblogic is running with PID: $PID"
+			     export GENDOMENV="L2"
+          		     cd /opt/fedex/genesis/gendom/current/usgendom/bin/
+			     ./stopManagedWebLogic.sh gendom13 t3s://u1051550.test.cloud.fedex.com:9902/
+			     ./stopNodeManager.sh
+			     PID=$(ps aux | grep [j]ava | awk '{print $2}')
+			     #Check if the ManagedServer is stopped, else kill it
+			     if [[ -z "$PID" ]]; then
+			          echo "ManagedServer is Stopped"
+			     else
+			          echo "ManagedServer is still running with PID: $PID"
+			          echo "Stopping ManagedServer..."
+				  kill -9 $PID
+			     fi
+			fi
+        fi
+
+	if [[ $HOST_PREFIX = u1051550 ]]
+	then
+			PID=$(ps aux | grep [w]eblogic.Server | awk '{print $2}')
+			#Check if the PID is empty
+			if [[ -z "$PID" ]]; then
+			     echo "Weblogic is not running!"
+			else
+			     echo "Weblogic is running with PID: $PID"
+			     export GENDOMENV="L2"
+          		     cd /opt/fedex/genesis/gendom/current/usgendom/bin/
+			     #./stopNodeManager.sh
+			     ./stopWebLogic.sh
+			      PID=$(ps aux | grep [j]ava | awk '{print $2}')
+			     #Check if the AdminServer is stopped, else kill it
+			     if [[ -z "$PID" ]]; then
+			          echo "Admin Server is Stopped"
+			     else
+			          echo "Admin server is still running with PID: $PID"
+			          echo "Stopping AdminServer..."
+				  kill -9 $PID
+			fi
+        fi
+	fi		
+		if [[ $HOST_PREFIX = u1064310 ]]
+	then
+			PID=$(ps aux | grep [w]eblogic.Server | awk '{print $2}')
+			#Check if the PID is empty
+			if [[ -z "$PID" ]]; then
+			     echo "Weblogic is not running!"
+			else
+			     echo "Weblogic is running with PID: $PID"
+			     export GENDOMENV="L3"
+ 				#AppDynamics Script call:
+ 				echo "Stopping AppDynamics…"
+ 				if [[ -e /opt/appd/current/machineagent/machineagent.jar ]]
+ 				then
+ 				/opt/appd/current/scripts/machine_agent_appd.sh stop
+ 				fi
+          		     cd /opt/fedex/genesis/gendom/current/usgendom/bin/
+			     ./stopManagedWebLogic.sh gendom11 t3s://u1062546.test.cloud.fedex.com:9902/
+			     ./stopNodeManager.sh
+			    # PID=$(ps aux | grep [w]eblogic.Server | awk '{print $2}')
+			    # PID1=$(ps aux | grep [w]eblogic.NodeManager | awk '{print $2}')
+			     PID=$(ps aux | grep [j]ava | awk '{print $2}')
+			     #Check if the ManagedServer is stopped, else kill it
+			     if [[ -z "$PID" ]]; then
+			          echo "ManagedServer is Stopped"
+			     else
+			          echo "ManagedServer is still running with PID: $PID"
+			          echo "Stopping ManagedServer ..."
+				  kill -9 $PID 
+			     fi
+			fi
+        fi
+	if [[ $HOST_PREFIX = u1064309 ]]
+	then
+			PID=$(ps aux | grep [w]eblogic.Server | awk '{print $2}')
+			#Check if the PID is empty
+			if [[ -z "$PID" ]]; then
+			     echo "Weblogic is not running!"
+			else
+			     echo "Weblogic is running with PID: $PID"
+			     export GENDOMENV="L3"
+				#AppDynamics Script call:
+				echo "Stopping AppDynamics…"
+				if [[ -e /opt/appd/current/machineagent/machineagent.jar ]]
+				then
+				/opt/appd/current/scripts/machine_agent_appd.sh stop
+				fi
+          		     cd /opt/fedex/genesis/gendom/current/usgendom/bin/
+			     ./stopManagedWebLogic.sh gendom12 t3s://u1062546.test.cloud.fedex.com:9902/
+			     ./stopNodeManager.sh
+			    # PID=$(ps aux | grep [w]eblogic.Server | awk '{print $2}')
+			     #PID1=$(ps aux | grep [w]eblogic.NodeManager | awk '{print $2}')
+			     PID=$(ps aux | grep [j]ava | awk '{print $2}')
+			     #Check if the ManagedServer is stopped, else kill it
+			     if [[ -z "$PID" ]]; then
+			          echo "ManagedServer is Stopped"
+			     else
+			          echo "ManagedServer is still running with PID: $PID"
+			          echo "Stopping ManagedServer..."
+				  kill -9 $PID 
+			     fi
+			fi
+        fi
+	if [[ $HOST_PREFIX = u1064311 ]]
+	then
+			PID=$(ps aux | grep [w]eblogic.Server | awk '{print $2}')
+			#Check if the PID is empty
+			if [[ -z "$PID" ]]; then
+			     echo "Weblogic is not running!"
+			else
+			     echo "Weblogic is running with PID: $PID"
+			     export GENDOMENV="L3"
+				#AppDynamics Script call:
+				echo "Stopping AppDynamics…"
+				if [[ -e /opt/appd/current/machineagent/machineagent.jar ]]
+				then
+				/opt/appd/current/scripts/machine_agent_appd.sh stop
+				fi
+          		     cd /opt/fedex/genesis/gendom/current/usgendom/bin/
+			     ./stopManagedWebLogic.sh gendom13 t3s://u1062546.test.cloud.fedex.com:9902/
+			     ./stopNodeManager.sh
+			     #PID=$(ps aux | grep [w]eblogic.Server | awk '{print $2}')
+			     #PID1=$(ps aux | grep [w]eblogic.NodeManager | awk '{print $2}')
+			     PID=$(ps aux | grep [j]ava | awk '{print $2}')
+			     #Check if the ManagedServer is stopped, else kill it
+			     if [[ -z "$PID" ]]; then
+			          echo "ManagedServer is Stopped"
+			     else
+			          echo "ManagedServer is still running with PID: $PID"
+			          echo "Stopping ManagedServer..."
+				  #kill -9 $PID $PID1
+				  kill -9 $PID
+			     fi
+			fi
+        fi
+	if [[ $HOST_PREFIX = u1064312 ]]
+	then
+			PID=$(ps aux | grep [w]eblogic.Server | awk '{print $2}')
+			#Check if the PID is empty
+			if [[ -z "$PID" ]]; then
+			     echo "Weblogic is not running!"
+			else
+			     echo "Weblogic is running with PID: $PID"
+			     export GENDOMENV="L3"
+				#AppDynamics Script call:
+				echo "Stopping AppDynamics…"
+				if [[ -e /opt/appd/current/machineagent/machineagent.jar ]]
+				then
+				/opt/appd/current/scripts/machine_agent_appd.sh stop
+				fi
+          		     cd /opt/fedex/genesis/gendom/current/usgendom/bin/
+			     ./stopManagedWebLogic.sh gendom14 t3s://u1062546.test.cloud.fedex.com:9902/
+			     ./stopNodeManager.sh
+			     #PID=$(ps aux | grep [w]eblogic.Server | awk '{print $2}')
+			     #PID1=$(ps aux | grep [w]eblogic.NodeManager | awk '{print $2}')
+			     PID=$(ps aux | grep [j]ava | awk '{print $2}')
+			     #Check if the ManagedServer is stopped, else kill it
+			     if [[ -z "$PID" ]]; then
+			          echo "ManagedServer is Stopped"
+			     else
+			          echo "ManagedServer is still running with PID: $PID"
+			          echo "Stopping ManagedServer..."
+				  kill -9 $PID 
+			     fi
+			fi
+        fi
+	if [[ $HOST_PREFIX = u1064637 ]]
+	then
+			PID=$(ps aux | grep [w]eblogic.Server | awk '{print $2}')
+			#Check if the PID is empty
+			if [[ -z "$PID" ]]; then
+			     echo "Weblogic is not running!"
+			else
+			     echo "Weblogic is running with PID: $PID"
+			     export GENDOMENV="L3"
+				#AppDynamics Script call:
+				echo "Stopping AppDynamics…"
+				if [[ -e /opt/appd/current/machineagent/machineagent.jar ]]
+				then
+				/opt/appd/current/scripts/machine_agent_appd.sh stop
+				fi
+          		     cd /opt/fedex/genesis/genrecog/current/usgendom/bin/
+			     ./stopManagedWebLogic.sh genrecog3 t3s://u1062546.test.cloud.fedex.com:9902/
+			     ./stopNodeManager.sh
+			     #PID=$(ps aux | grep [w]eblogic.Server | awk '{print $2}')
+			     #PID1=$(ps aux | grep [w]eblogic.NodeManager | awk '{print $2}')
+			     PID=$(ps aux | grep [j]ava | awk '{print $2}')
+			     #Check if the ManagedServer is stopped, else kill it
+			     if [[ -z "$PID" ]]; then
+			          echo "ManagedServer is Stopped"
+			     else
+			          echo "ManagedServer is still running with PID: $PID"
+			          echo "Stopping ManagedServer..."
+				  kill -9 $PID
+			     fi
+			fi
+        fi
+	if [[ $HOST_PREFIX = u1064638 ]]
+then
+			PID=$(ps aux | grep [w]eblogic.Server | awk '{print $2}')
+			#Check if the PID is empty
+			if [[ -z "$PID" ]]; then
+			     echo "Weblogic is not running!"
+			else
+			     echo "Weblogic is running with PID: $PID"
+			     export GENDOMENV="L3"
+				#AppDynamics Script call:
+				echo "Stopping AppDynamics…"
+				if [[ -e /opt/appd/current/machineagent/machineagent.jar ]]
+				then
+				/opt/appd/current/scripts/machine_agent_appd.sh stop
+				fi
+          		     cd /opt/fedex/genesis/genrecog/current/usgendom/bin/
+			     ./stopManagedWebLogic.sh genrecog4 t3s://u1062546.test.cloud.fedex.com:9902/
+			     ./stopNodeManager.sh
+			     PID=$(ps aux | grep [j]ava | awk '{print $2}')
+			     #Check if the ManagedServer is stopped, else kill it
+			     if [[ -z "$PID" ]]; then
+			          echo "ManagedServer is Stopped"
+			     else
+			          echo "ManagedServer is still running with PID: $PID"
+			          echo "Stopping ManagedServer..."
+				  kill -9 $PID 
+			     fi
+			fi
+        fi
+	if [[ $HOST_PREFIX = u1062546 ]]
+	then
+			PID=$(ps aux | grep [w]eblogic.Server | awk '{print $2}')
+			#Check if the PID is empty
+			if [[ -z "$PID" ]]; then
+			     echo "Weblogic is not running!"
+			else
+			     echo "Weblogic is running with PID: $PID"
+			     export GENDOMENV="L3"
+				#AppDynamics Script call:
+				echo "Stopping AppDynamics…"
+				if [[ -e /opt/appd/current/machineagent/machineagent.jar ]]
+				then
+				/opt/appd/current/scripts/machine_agent_appd.sh stop
+				fi
+          		     cd /opt/fedex/genesis/gendom/current/usgendom/bin/
+			     #./stopNodeManager.sh
+			     ./stopWebLogic.sh
+			      PID=$(ps aux | grep [j]ava | awk '{print $2}')
+			     #Check if the AdminServer is stopped, else kill it
+			     if [[ -z "$PID" ]]; then
+			          echo "Admin Server is Stopped"
+			     else
+			          echo "Admin server is still running with PID: $PID"
+			          echo "Stopping AdminServer..."
+				  kill -9 $PID
+			fi
+        fi
+	fi
+	   	if [[ $HOST_PREFIX = u1060169 ]]
+	then
+			PID=$(ps aux | grep [w]eblogic.Server | awk '{print $2}')
+			#Check if the PID is empty
+			if [[ -z "$PID" ]]; then
+			     echo "Weblogic is not running!"
+			else
+			     echo "Weblogic is running with PID: $PID"
+			     export GENDOMENV="L3DR"
+				#AppDynamics Script call:
+				echo "Stopping AppDynamics…"
+				if [[ -e /opt/appd/current/machineagent/machineagent.jar ]]
+				then
+				/opt/appd/current/scripts/machine_agent_appd.sh stop
+				fi
+          		     cd /opt/fedex/genesis/gendom/current/usgendom/bin/
+			     ./stopManagedWebLogic.sh gendom11 t3s://u1059926.test.cloud.fedex.com:9902/
+			     ./stopNodeManager.sh
+			    PID=$(ps aux | grep [j]ava | awk '{print $2}')
+			     #Check if the ManagedServer is stopped, else kill it
+			     if [[ -z "$PID" ]]; then
+			          echo "ManagedServer is Stopped"
+			     else
+			          echo "ManagedServer is still running with PID: $PID"
+			          echo "Stopping ManagedServer ..."
+				  kill -9 $PID
+			     fi
+			fi
+        fi
+	if [[ $HOST_PREFIX = u1060168 ]]
+	then
+			PID=$(ps aux | grep [w]eblogic.Server | awk '{print $2}')
+			#Check if the PID is empty
+			if [[ -z "$PID" ]]; then
+			     echo "Weblogic is not running!"
+			else
+			     echo "Weblogic is running with PID: $PID"
+			     export GENDOMENV="L3DR"
+				#AppDynamics Script call:
+				echo "Stopping AppDynamics…"
+				if [[ -e /opt/appd/current/machineagent/machineagent.jar ]]
+				then
+				/opt/appd/current/scripts/machine_agent_appd.sh stop
+				fi
+          		     cd /opt/fedex/genesis/gendom/current/usgendom/bin/
+			     ./stopManagedWebLogic.sh gendom12 t3s://u1059926.test.cloud.fedex.com:9902/
+			     ./stopNodeManager.sh
+			     PID=$(ps aux | grep [j]ava | awk '{print $2}')
+			     #Check if the ManagedServer is stopped, else kill it
+			     if [[ -z "$PID" ]]; then
+			          echo "ManagedServer is Stopped"
+			     else
+			          echo "ManagedServer is still running with PID: $PID"
+			          echo "Stopping ManagedServer..."
+				  kill -9 $PID
+			     fi
+			fi
+        fi
+	if [[ $HOST_PREFIX = u1060414 ]]
+	then
+			PID=$(ps aux | grep [w]eblogic.Server | awk '{print $2}')
+			#Check if the PID is empty
+			if [[ -z "$PID" ]]; then
+			     echo "Weblogic is not running!"
+			else
+			     echo "Weblogic is running with PID: $PID"
+			     export GENDOMENV="L3DR"
+				#AppDynamics Script call:
+				echo "Stopping AppDynamics…"
+				if [[ -e /opt/appd/current/machineagent/machineagent.jar ]]
+				then
+				/opt/appd/current/scripts/machine_agent_appd.sh stop
+				fi
+          		     cd /opt/fedex/genesis/gendom/current/usgendom/bin/
+			     ./stopManagedWebLogic.sh gendom13 t3s://u1059926.test.cloud.fedex.com:9902/
+			     ./stopNodeManager.sh
+			     PID=$(ps aux | grep [j]ava | awk '{print $2}')
+			     #Check if the ManagedServer is stopped, else kill it
+			     if [[ -z "$PID" ]]; then
+			          echo "ManagedServer is Stopped"
+			     else
+			          echo "ManagedServer is still running with PID: $PID"
+			          echo "Stopping ManagedServer..."
+				  kill -9 $PID
+			     fi
+			fi
+        fi
+	if [[ $HOST_PREFIX = u1059987 ]]
+	then
+			PID=$(ps aux | grep [w]eblogic.Server | awk '{print $2}')
+			#Check if the PID is empty
+			if [[ -z "$PID" ]]; then
+			     echo "Weblogic is not running!"
+			else
+			     echo "Weblogic is running with PID: $PID"
+			     export GENDOMENV="L3DR"
+				#AppDynamics Script call:
+				echo "Stopping AppDynamics…"
+				if [[ -e /opt/appd/current/machineagent/machineagent.jar ]]
+				then
+				/opt/appd/current/scripts/machine_agent_appd.sh stop
+				fi
+          		     cd /opt/fedex/genesis/gendom/current/usgendom/bin/
+			     ./stopManagedWebLogic.sh gendom14 t3s://u1059926.test.cloud.fedex.com:9902/
+			     ./stopNodeManager.sh
+			     PID=$(ps aux | grep [j]ava | awk '{print $2}')
+			     #Check if the ManagedServer is stopped, else kill it
+			     if [[ -z "$PID" ]]; then
+			          echo "ManagedServer is Stopped"
+			     else
+			          echo "ManagedServer is still running with PID: $PID"
+			          echo "Stopping ManagedServer..."
+				  kill -9 $PID
+			     fi
+			fi
+        fi
+	if [[ $HOST_PREFIX = u1060171 ]]
+	then
+			PID=$(ps aux | grep [w]eblogic.Server | awk '{print $2}')
+			#Check if the PID is empty
+			if [[ -z "$PID" ]]; then
+			     echo "Weblogic is not running!"
+			else
+			     echo "Weblogic is running with PID: $PID"
+			     export GENDOMENV="L3DR"
+				#AppDynamics Script call:
+				echo "Stopping AppDynamics…"
+				if [[ -e /opt/appd/current/machineagent/machineagent.jar ]]
+				then
+				/opt/appd/current/scripts/machine_agent_appd.sh stop
+				fi
+          		     cd /opt/fedex/genesis/genrecog/current/usgendom/bin/
+			     ./stopManagedWebLogic.sh genrecog3 t3s://u1059926.test.cloud.fedex.com:9902/
+			     ./stopNodeManager.sh
+			     PID=$(ps aux | grep [j]ava | awk '{print $2}')
+			     #Check if the ManagedServer is stopped, else kill it
+			     if [[ -z "$PID" ]]; then
+			          echo "ManagedServer is Stopped"
+			     else
+			          echo "ManagedServer is still running with PID: $PID"
+			          echo "Stopping ManagedServer..."
+				  kill -9 $PID
+			     fi
+			fi
+        fi
+	if [[ $HOST_PREFIX = u1059991 ]]
+then
+			PID=$(ps aux | grep [w]eblogic.Server | awk '{print $2}')
+			#Check if the PID is empty
+			if [[ -z "$PID" ]]; then
+			     echo "Weblogic is not running!"
+			else
+			     echo "Weblogic is running with PID: $PID"
+			     export GENDOMENV="L3DR"
+				#AppDynamics Script call:
+				echo "Stopping AppDynamics…"
+				if [[ -e /opt/appd/current/machineagent/machineagent.jar ]]
+				then
+				/opt/appd/current/scripts/machine_agent_appd.sh stop
+				fi
+          		     cd /opt/fedex/genesis/genrecog/current/usgendom/bin/
+			     ./stopManagedWebLogic.sh genrecog4 t3s://u1059926.test.cloud.fedex.com:9902/
+			     ./stopNodeManager.sh
+			     PID=$(ps aux | grep [j]ava | awk '{print $2}')
+			     #Check if the ManagedServer is stopped, else kill it
+			     if [[ -z "$PID" ]]; then
+			          echo "ManagedServer is Stopped"
+			     else
+			          echo "ManagedServer is still running with PID: $PID"
+			          echo "Stopping ManagedServer..."
+				  kill -9 $PID
+			     fi
+			fi
+        fi
+	if [[ $HOST_PREFIX = u1059926 ]]
+	then
+			PID=$(ps aux | grep [w]eblogic.Server | awk '{print $2}')
+			#Check if the PID is empty
+			if [[ -z "$PID" ]]; then
+			     echo "Weblogic is not running!"
+			else
+			     echo "Weblogic is running with PID: $PID"
+			     export GENDOMENV="L3DR"
+				#AppDynamics Script call:
+				echo "Stopping AppDynamics…"
+				if [[ -e /opt/appd/current/machineagent/machineagent.jar ]]
+				then
+				/opt/appd/current/scripts/machine_agent_appd.sh stop
+				fi
+          		     cd /opt/fedex/genesis/gendom/current/usgendom/bin/
+			     #./stopNodeManager.sh
+			     ./stopWebLogic.sh
+			      PID=$(ps aux | grep [j]ava | awk '{print $2}')
+			     #Check if the AdminServer is stopped, else kill it
+			     if [[ -z "$PID" ]]; then
+			          echo "Admin Server is Stopped"
+			     else
+			          echo "Admin server is still running with PID: $PID"
+			          echo "Stopping AdminServer..."
+				  kill -9 $PID
+			fi
+        fi
+	fi
+		if [[ $HOST_PREFIX = u1061499 ]]
+	then
+			PID=$(ps aux | grep [w]eblogic.Server | awk '{print $2}')
+			#Check if the PID is empty
+			if [[ -z "$PID" ]]; then
+			     echo "Weblogic is not running!"
+			else
+			     echo "Weblogic is running with PID: $PID"
+			     export GENDOMENV="L4"
+          		     cd /opt/fedex/genesis/gendom/current/usgendom/bin/
+			     ./stopManagedWebLogic.sh gendom11 t3s://u1052262.test.cloud.fedex.com:9902/
+			     ./stopNodeManager.sh
+			    PID=$(ps aux | grep [j]ava | awk '{print $2}')
+			     #Check if the ManagedServer is stopped, else kill it
+			     if [[ -z "$PID" ]]; then
+			          echo "ManagedServer is Stopped"
+			     else
+			          echo "ManagedServer is still running with PID: $PID"
+			          echo "Stopping ManagedServer ..."
+				  kill -9 $PID
+			     fi
+			fi
+        fi
+	if [[ $HOST_PREFIX = u1061498 ]]
+	then
+			PID=$(ps aux | grep [w]eblogic.Server | awk '{print $2}')
+			#Check if the PID is empty
+			if [[ -z "$PID" ]]; then
+			     echo "Weblogic is not running!"
+			else
+			     echo "Weblogic is running with PID: $PID"
+			     export GENDOMENV="L4"
+          		     cd /opt/fedex/genesis/gendom/current/usgendom/bin/
+			     ./stopManagedWebLogic.sh gendom12 t3s://u1052262.test.cloud.fedex.com:9902/
+			     ./stopNodeManager.sh
+			     PID=$(ps aux | grep [j]ava | awk '{print $2}')
+			     #Check if the ManagedServer is stopped, else kill it
+			     if [[ -z "$PID" ]]; then
+			          echo "ManagedServer is Stopped"
+			     else
+			          echo "ManagedServer is still running with PID: $PID"
+			          echo "Stopping ManagedServer..."
+				  kill -9 $PID
+			     fi
+			fi
+        fi
+	if [[ $HOST_PREFIX = u1061568 ]]
+	then
+			PID=$(ps aux | grep [w]eblogic.Server | awk '{print $2}')
+			#Check if the PID is empty
+			if [[ -z "$PID" ]]; then
+			     echo "Weblogic is not running!"
+			else
+			     echo "Weblogic is running with PID: $PID"
+			     export GENDOMENV="L4"
+          		     cd /opt/fedex/genesis/gendom/current/usgendom/bin/
+			     ./stopManagedWebLogic.sh gendom13 t3s://u1052262.test.cloud.fedex.com:9902/
+			     ./stopNodeManager.sh
+			     PID=$(ps aux | grep [j]ava | awk '{print $2}')
+			     #Check if the ManagedServer is stopped, else kill it
+			     if [[ -z "$PID" ]]; then
+			          echo "ManagedServer is Stopped"
+			     else
+			          echo "ManagedServer is still running with PID: $PID"
+			          echo "Stopping ManagedServer..."
+				  kill -9 $PID
+			     fi
+			fi
+        fi
+
+	if [[ $HOST_PREFIX = u1052262 ]]
+	then
+			PID=$(ps aux | grep [w]eblogic.Server | awk '{print $2}')
+			#Check if the PID is empty
+			if [[ -z "$PID" ]]; then
+			     echo "Weblogic is not running!"
+			else
+			     echo "Weblogic is running with PID: $PID"
+			     export GENDOMENV="L4"
+          		     cd /opt/fedex/genesis/gendom/current/usgendom/bin/
+			     #./stopNodeManager.sh
+			     ./stopWebLogic.sh
+			      PID=$(ps aux | grep [j]ava | awk '{print $2}')
+			     #Check if the AdminServer is stopped, else kill it
+			     if [[ -z "$PID" ]]; then
+			          echo "Admin Server is Stopped"
+			     else
+			          echo "Admin server is still running with PID: $PID"
+			          echo "Stopping AdminServer..."
+				  kill -9 $PID
+			fi
+        fi
+	fi
+    ;;     
+    *)
+        echo "Unknown network address - Exiting"
+        exit 1
+    ;;
+esac
+**********************************************************************************************************************************
+startNM.sh#!/bin/bash
+set -x
+###########################################################################
+## start NodeManagers
+###########################################################################
+EAINUMBER=7353
+export EAINUMBER
+HOSTNAME=`hostname`
+HOST_PREFIX=`echo $HOSTNAME | cut -c1-8`
+case $HOST_PREFIX in
+    
+    'u1064310'|'u1064309'|'u1064311'|'u1064312'|'u1064637'|'u1064638'|'u1060169'|'u1060168'|'u1060414'|'u1059987'|'u1060171'|'u1059991'|'u1051291'|'u1051292'|'u1051661'|'u1061499'|'u1061498'|'u1061568')
+  
+#------------------------- L3 env ------------------------------ 
+       if [[ $HOST_PREFIX = u1064310 ]]
+       then
+       		export GENDOMENV="L3"
+			cd /opt/fedex/genesis/gendom/current/usgendom/bin/
+			nohup ./startNodeManager.sh noderby 1>/dev/null 2>&1 & 
+			ps -ef | grep java
+			sleep 5
+			
+			APPD_SERVER_NAME=gen-lvl3-us-gendom-las01
+			export APPD_SERVER_NAME
+        		if [[ -e /opt/appd/current/appagent/javaagent.jar ]]
+        		then
+            		. /opt/appd/current/scripts/app_agent_appd.sh ${EAINUMBER}
+        		fi
+        		if [[ -e /opt/appd/current/machineagent/machineagent.jar ]]
+        		then
+            		/opt/appd/current/scripts/machine_agent_appd.sh start
+        		fi
+       fi
+      
+	  if [[ $HOST_PREFIX = u1064309 ]]
+       then
+		export GENDOMENV="L3"
+			cd /opt/fedex/genesis/gendom/current/usgendom/bin/
+			nohup ./startNodeManager.sh noderby 1>/dev/null 2>&1 & 
+			ps -ef | grep java
+			sleep 5
+			
+			APPD_SERVER_NAME=gen-lvl3-us-gendom-las02
+			export APPD_SERVER_NAME
+        		if [[ -e /opt/appd/current/appagent/javaagent.jar ]]
+        		then
+            		. /opt/appd/current/scripts/app_agent_appd.sh ${EAINUMBER}
+        		fi
+        		if [[ -e /opt/appd/current/machineagent/machineagent.jar ]]
+        		then
+            		/opt/appd/current/scripts/machine_agent_appd.sh start
+        		fi
+        fi
+       
+	     if [[ $HOST_PREFIX = u1064311 ]]
+        then
+            export GENDOMENV="L3"
+			cd /opt/fedex/genesis/gendom/current/usgendom/bin/
+			nohup ./startNodeManager.sh noderby 1>/dev/null 2>&1 & 
+			ps -ef | grep java
+			sleep 5
+			
+			APPD_SERVER_NAME=gen-lvl3-us-gendom-las03
+			export APPD_SERVER_NAME
+        		if [[ -e /opt/appd/current/appagent/javaagent.jar ]]
+        		then
+            		. /opt/appd/current/scripts/app_agent_appd.sh ${EAINUMBER}
+        		fi
+        		if [[ -e /opt/appd/current/machineagent/machineagent.jar ]]
+        		then
+            		/opt/appd/current/scripts/machine_agent_appd.sh start
+        		fi
+        fi	
+       
+	   if [[ $HOST_PREFIX = u1064312 ]]
+        then
+        	export GENDOMENV="L3"
+			cd /opt/fedex/genesis/gendom/current/usgendom/bin/
+			nohup ./startNodeManager.sh noderby 1>/dev/null 2>&1 & 
+			ps -ef | grep java
+			sleep 5
+			
+			APPD_SERVER_NAME=gen-lvl3-us-gendom-las04
+			export APPD_SERVER_NAME
+        		if [[ -e /opt/appd/current/appagent/javaagent.jar ]]
+        		then
+            		. /opt/appd/current/scripts/app_agent_appd.sh ${EAINUMBER}
+        		fi
+        		if [[ -e /opt/appd/current/machineagent/machineagent.jar ]]
+        		then
+            		/opt/appd/current/scripts/machine_agent_appd.sh start
+        		fi
+        fi
+       
+	   if [[ $HOST_PREFIX = u1064637 ]]
+        then
+        	export GENDOMENV="L3"
+			cd /opt/fedex/genesis/gendom/current/usgendom/bin/
+			nohup ./startNodeManager.sh noderby 1>/dev/null 2>&1 & 
+			ps -ef | grep java
+			sleep 5
+			
+			APPD_SERVER_NAME=gen-lvl3-us-recog-las01
+			export APPD_SERVER_NAME
+        		if [[ -e /opt/appd/current/appagent/javaagent.jar ]]
+        		then
+            		. /opt/appd/current/scripts/app_agent_appd.sh ${EAINUMBER}
+        		fi
+        		if [[ -e /opt/appd/current/machineagent/machineagent.jar ]]
+        		then
+            		/opt/appd/current/scripts/machine_agent_appd.sh start
+        		fi
+        fi
+       
+	   if [[ $HOST_PREFIX = u1064638 ]]
+        then
+        	export GENDOMENV="L3"
+			cd /opt/fedex/genesis/gendom/current/usgendom/bin/
+			nohup ./startNodeManager.sh noderby 1>/dev/null 2>&1 & 
+			ps -ef | grep java
+			sleep 5
+			
+			APPD_SERVER_NAME=gen-lvl3-us-recog-las02
+			export APPD_SERVER_NAME
+        		if [[ -e /opt/appd/current/appagent/javaagent.jar ]]
+        		then
+            		. /opt/appd/current/scripts/app_agent_appd.sh ${EAINUMBER}
+        		fi
+        		if [[ -e /opt/appd/current/machineagent/machineagent.jar ]]
+        		then
+            		/opt/appd/current/scripts/machine_agent_appd.sh start
+        		fi
+        fi
+	
+#----------------------------- L3DR -------------------------------------	
+	if [[ $HOST_PREFIX = u1060169 ]]
+	then
+        	export GENDOMENV="L3DR"
+			cd /opt/fedex/genesis/gendom/current/usgendom/bin/
+			nohup ./startNodeManager.sh noderby 1>/dev/null 2>&1 & 
+			ps -ef | grep java
+			sleep 5
+			
+			APPD_SERVER_NAME=gen-lvl3-us-dr-gendom-atl01
+			export APPD_SERVER_NAME
+        		if [[ -e /opt/appd/current/appagent/javaagent.jar ]]
+        		then
+            		. /opt/appd/current/scripts/app_agent_appd.sh ${EAINUMBER}
+        		fi
+        		if [[ -e /opt/appd/current/machineagent/machineagent.jar ]]
+        		then
+            		/opt/appd/current/scripts/machine_agent_appd.sh start
+        		fi
+		fi
+	if [[ $HOST_PREFIX = u1060168 ]]
+	then
+        	export GENDOMENV="L3DR"
+			cd /opt/fedex/genesis/gendom/current/usgendom/bin/
+			nohup ./startNodeManager.sh noderby 1>/dev/null 2>&1 & 
+			ps -ef | grep java
+			sleep 5
+			
+			APPD_SERVER_NAME=gen-lvl3-us-dr-gendom-atl02
+			export APPD_SERVER_NAME
+        		if [[ -e /opt/appd/current/appagent/javaagent.jar ]]
+        		then
+            		. /opt/appd/current/scripts/app_agent_appd.sh ${EAINUMBER}
+        		fi
+        		if [[ -e /opt/appd/current/machineagent/machineagent.jar ]]
+        		then
+            		/opt/appd/current/scripts/machine_agent_appd.sh start
+        		fi
+        fi
+        if [[ $HOST_PREFIX = u1060414 ]]
+        then
+        	export GENDOMENV="L3DR"
+			cd /opt/fedex/genesis/gendom/current/usgendom/bin/
+			nohup ./startNodeManager.sh noderby 1>/dev/null 2>&1 & 
+			ps -ef | grep java
+			sleep 5
+			
+			APPD_SERVER_NAME=gen-lvl3-us-dr-gendom-atl03
+			export APPD_SERVER_NAME
+        		if [[ -e /opt/appd/current/appagent/javaagent.jar ]]
+        		then
+            		. /opt/appd/current/scripts/app_agent_appd.sh ${EAINUMBER}
+        		fi
+        		if [[ -e /opt/appd/current/machineagent/machineagent.jar ]]
+        		then
+            		/opt/appd/current/scripts/machine_agent_appd.sh start
+        		fi
+        fi	
+        if [[ $HOST_PREFIX = u1059987 ]]
+        then
+        	export GENDOMENV="L3DR"
+			cd /opt/fedex/genesis/gendom/current/usgendom/bin/
+			nohup ./startNodeManager.sh noderby 1>/dev/null 2>&1 & 
+			ps -ef | grep java
+			sleep 5
+			
+			APPD_SERVER_NAME=gen-lvl3-us-dr-gendom-atl04
+			export APPD_SERVER_NAME
+        		if [[ -e /opt/appd/current/appagent/javaagent.jar ]]
+        		then
+            		. /opt/appd/current/scripts/app_agent_appd.sh ${EAINUMBER}
+        		fi
+        		if [[ -e /opt/appd/current/machineagent/machineagent.jar ]]
+        		then
+            		/opt/appd/current/scripts/machine_agent_appd.sh start
+        		fi
+        fi
+        if [[ $HOST_PREFIX = u1060171 ]]
+        then
+        	export GENDOMENV="L3DR"
+			cd /opt/fedex/genesis/gendom/current/usgendom/bin/
+			nohup ./startNodeManager.sh noderby 1>/dev/null 2>&1 & 
+			ps -ef | grep java
+			sleep 5
+			
+			APPD_SERVER_NAME=gen-lvl3-us-dr-recog-atl01
+			export APPD_SERVER_NAME
+        		if [[ -e /opt/appd/current/appagent/javaagent.jar ]]
+        		then
+            		. /opt/appd/current/scripts/app_agent_appd.sh ${EAINUMBER}
+        		fi
+        		if [[ -e /opt/appd/current/machineagent/machineagent.jar ]]
+        		then
+            		/opt/appd/current/scripts/machine_agent_appd.sh start
+        		fi
+        fi
+        if [[ $HOST_PREFIX = u1059991 ]]
+        then
+        	export GENDOMENV="L3DR"
+			cd /opt/fedex/genesis/gendom/current/usgendom/bin/
+			nohup ./startNodeManager.sh noderby 1>/dev/null 2>&1 & 
+			ps -ef | grep java
+			sleep 5
+			
+			APPD_SERVER_NAME=gen-lvl3-us-dr-recog-atl02
+			export APPD_SERVER_NAME
+        		if [[ -e /opt/appd/current/appagent/javaagent.jar ]]
+        		then
+            		. /opt/appd/current/scripts/app_agent_appd.sh ${EAINUMBER}
+        		fi
+        		if [[ -e /opt/appd/current/machineagent/machineagent.jar ]]
+        		then
+            		/opt/appd/current/scripts/machine_agent_appd.sh start
+        		fi
+        fi
+		
+#------------------------------------------------ L2 env --------------------------------		
+		if [[ $HOST_PREFIX = u1051291 ]]
+		then
+			export GENDOMENV="L2"
+			cd /opt/fedex/genesis/gendom/current/usgendom/bin/
+			nohup ./startNodeManager.sh noderby 1>/dev/null 2>&1 & 
+			ps -ef | grep java
+			sleep 5
+		fi
+		if [[ $HOST_PREFIX = u1051292 ]]
+		then
+			export GENDOMENV="L2"
+			cd /opt/fedex/genesis/gendom/current/usgendom/bin/
+			nohup ./startNodeManager.sh noderby 1>/dev/null 2>&1 & 
+			ps -ef | grep java
+			sleep 5
+        fi
+      
+        if [[ $HOST_PREFIX = u1051661 ]]
+        then
+			export GENDOMENV="L2"
+			cd /opt/fedex/genesis/gendom/current/usgendom/bin/
+			nohup ./startNodeManager.sh noderby 1>/dev/null 2>&1 & 
+			ps -ef | grep java
+			sleep 5
+        fi
+		
+#----------------------------------- L4 env -----------------------------------
+
+		if [[ $HOST_PREFIX = u1061499 ]]
+		then
+			export GENDOMENV="L4"
+			cd /opt/fedex/genesis/gendom/current/usgendom/bin/
+			nohup ./startNodeManager.sh noderby 1>/dev/null 2>&1 & 
+			ps -ef | grep java
+			sleep 5
+		fi
+		if [[ $HOST_PREFIX = u1061498 ]]
+		then
+        export GENDOMENV="L4"
+			cd /opt/fedex/genesis/gendom/current/usgendom/bin/
+			nohup ./startNodeManager.sh noderby 1>/dev/null 2>&1 & 
+			ps -ef | grep java
+			sleep 5
+        fi
+      
+        if [[ $HOST_PREFIX = u1061568 ]]
+        then
+        export GENDOMENV="L4"
+			cd /opt/fedex/genesis/gendom/current/usgendom/bin/
+			nohup ./startNodeManager.sh noderby 1>/dev/null 2>&1 & 
+			ps -ef | grep java
+			sleep 5
+        fi
+    ;;     
+    *)
+        echo "Unknown network address - Exiting"
+        exit 1
+    ;;
+esac
+**********************************************************************************************************************************
+stopNM.sh#!/bin/bash
+
+###########################################################################
+## stop NodeManagers
+###########################################################################
+EAINUMBER=7353
+export EAINUMBER
+HOSTNAME=`hostname`
+HOST_PREFIX=`echo $HOSTNAME | cut -c1-8`
+case $HOST_PREFIX in
+
+  'u1051291'|'u1051292'|'u1051661'|'u1064310'|'u1064309'|'u1064311'|'u1064312'|'u1064637'|'u1064638'|'u1060169'|'u1060168'|'u1060414'|'u1059987'|'u1060171'|'u1059991'|'u1061499'|'u1061498'|'u1061568')
+    
+    	if [[ $HOST_PREFIX = u1051291 ]]
+	then
+		export GENDOMENV="L2"
+          	 cd /opt/fedex/genesis/gendom/current/usgendom/bin/
+			 ./stopNodeManager.sh
+        fi
+	if [[ $HOST_PREFIX = u1051292 ]]
+	then
+		export GENDOMENV="L2"
+          	 cd /opt/fedex/genesis/gendom/current/usgendom/bin/
+			 ./stopNodeManager.sh
+        fi
+	if [[ $HOST_PREFIX = u1051661 ]]
+	then
+		export GENDOMENV="L2"
+          	 cd /opt/fedex/genesis/gendom/current/usgendom/bin/
+			 ./stopNodeManager.sh
+        fi
+
+################################# L3 #######################################################3	
+	if [[ $HOST_PREFIX = u1064310 ]]
+	then
+		export GENDOMENV="L3"
+		cd /opt/fedex/genesis/gendom/current/usgendom/bin/
+		./stopNodeManager.sh
+		#AppDynamics Script call:
+        	echo "Stopping AppDynamics…"
+        	if [[ -e /opt/appd/current/machineagent/machineagent.jar ]]
+        	then
+            	/opt/appd/current/scripts/machine_agent_appd.sh stop
+        	fi
+          	
+        fi
+	if [[ $HOST_PREFIX = u1064309 ]]
+	then
+		export GENDOMENV="L3"
+		cd /opt/fedex/genesis/gendom/current/usgendom/bin/
+		./stopNodeManager.sh
+		#AppDynamics Script call:
+        	echo "Stopping AppDynamics…"
+        	if [[ -e /opt/appd/current/machineagent/machineagent.jar ]]
+        	then
+            	/opt/appd/current/scripts/machine_agent_appd.sh stop
+        	fi
+          	
+        fi
+	if [[ $HOST_PREFIX = u1064311 ]]
+	then
+		export GENDOMENV="L3"
+		cd /opt/fedex/genesis/gendom/current/usgendom/bin/
+		./stopNodeManager.sh
+		#AppDynamics Script call:
+        	echo "Stopping AppDynamics…"
+        	if [[ -e /opt/appd/current/machineagent/machineagent.jar ]]
+        	then
+            	/opt/appd/current/scripts/machine_agent_appd.sh stop
+        	fi
+          	
+        fi
+	if [[ $HOST_PREFIX = u1064312 ]]
+	then
+		export GENDOMENV="L3"
+		cd /opt/fedex/genesis/gendom/current/usgendom/bin/
+		./stopNodeManager.sh
+		#AppDynamics Script call:
+        	echo "Stopping AppDynamics…"
+        	if [[ -e /opt/appd/current/machineagent/machineagent.jar ]]
+        	then
+            	/opt/appd/current/scripts/machine_agent_appd.sh stop
+        	fi
+          	
+        fi
+	if [[ $HOST_PREFIX = u1064637 ]]
+   	then
+		export GENDOMENV="L3"
+		cd /opt/fedex/genesis/gendom/current/usgendom/bin/
+		./stopNodeManager.sh
+		#AppDynamics Script call:
+        	echo "Stopping AppDynamics…"
+        	if [[ -e /opt/appd/current/machineagent/machineagent.jar ]]
+        	then
+            	/opt/appd/current/scripts/machine_agent_appd.sh stop
+        	fi
+          	
+        fi
+     	if [[ $HOST_PREFIX = u1064638 ]]
+    	then
+		export GENDOMENV="L3"
+		cd /opt/fedex/genesis/gendom/current/usgendom/bin/
+		./stopNodeManager.sh
+		#AppDynamics Script call:
+        	echo "Stopping AppDynamics…"
+        	if [[ -e /opt/appd/current/machineagent/machineagent.jar ]]
+        	then
+            	/opt/appd/current/scripts/machine_agent_appd.sh stop
+        	fi
+          	
+        fi
+
+#################################### L3DR ##########################################
+	if [[ $HOST_PREFIX = u1060169 ]]
+	then
+		export GENDOMENV="L3DR"
+		cd /opt/fedex/genesis/gendom/current/usgendom/bin/
+		./stopNodeManager.sh
+		#AppDynamics Script call:
+        	echo "Stopping AppDynamics…"
+        	if [[ -e /opt/appd/current/machineagent/machineagent.jar ]]
+        	then
+            	/opt/appd/current/scripts/machine_agent_appd.sh stop
+        	fi
+          	
+        fi
+	if [[ $HOST_PREFIX = u1060168 ]]
+		then
+		export GENDOMENV="L3DR"
+		cd /opt/fedex/genesis/gendom/current/usgendom/bin/
+		 ./stopNodeManager.sh
+		#AppDynamics Script call:
+        	echo "Stopping AppDynamics…"
+        	if [[ -e /opt/appd/current/machineagent/machineagent.jar ]]
+        	then
+            	/opt/appd/current/scripts/machine_agent_appd.sh stop
+        	fi
+          	
+        fi
+	if [[ $HOST_PREFIX = u1060414 ]]
+		then
+		export GENDOMENV="L3DR"
+		cd /opt/fedex/genesis/gendom/current/usgendom/bin/
+		./stopNodeManager.sh
+		#AppDynamics Script call:
+        	echo "Stopping AppDynamics…"
+        	if [[ -e /opt/appd/current/machineagent/machineagent.jar ]]
+        	then
+            	/opt/appd/current/scripts/machine_agent_appd.sh stop
+        	fi
+          	
+        fi
+	if [[ $HOST_PREFIX = u1059987 ]]
+		then
+		export GENDOMENV="L3DR"
+		cd /opt/fedex/genesis/gendom/current/usgendom/bin/
+		./stopNodeManager.sh
+		#AppDynamics Script call:
+        	echo "Stopping AppDynamics…"
+        	if [[ -e /opt/appd/current/machineagent/machineagent.jar ]]
+        	then
+            	/opt/appd/current/scripts/machine_agent_appd.sh stop
+        	fi
+          	
+        fi
+	if [[ $HOST_PREFIX = u1060171 ]]
+		then
+		export GENDOMENV="L3DR"
+		cd /opt/fedex/genesis/gendom/current/usgendom/bin/
+		./stopNodeManager.sh
+		#AppDynamics Script call:
+        	echo "Stopping AppDynamics…"
+        	if [[ -e /opt/appd/current/machineagent/machineagent.jar ]]
+        	then
+            	/opt/appd/current/scripts/machine_agent_appd.sh stop
+        	fi
+          	
+        fi
+	if [[ $HOST_PREFIX = u1059991 ]]
+	then
+		export GENDOMENV="L3DR"
+		cd /opt/fedex/genesis/gendom/current/usgendom/bin/
+		./stopNodeManager.sh
+		#AppDynamics Script call:
+        	echo "Stopping AppDynamics…"
+        	if [[ -e /opt/appd/current/machineagent/machineagent.jar ]]
+        	then
+            	/opt/appd/current/scripts/machine_agent_appd.sh stop
+        	fi
+          	
+        fi
+############################################## L4 ###########################################333
+		if [[ $HOST_PREFIX = u1061499 ]]
+		then
+		export GENDOMENV="L4"
+          	 cd /opt/fedex/genesis/gendom/current/usgendom/bin/
+			 ./stopNodeManager.sh
+        fi
+	if [[ $HOST_PREFIX = u1061498 ]]
+	then
+		export GENDOMENV="L4"
+          	 cd /opt/fedex/genesis/gendom/current/usgendom/bin/
+			 ./stopNodeManager.sh
+        fi
+	if [[ $HOST_PREFIX = u1061568 ]]
+	then
+		export GENDOMENV="L4"
+          	 cd /opt/fedex/genesis/gendom/current/usgendom/bin/
+			 ./stopNodeManager.sh
+        fi
+    ;;     
+    *)
+        echo "Unknown network address - Exiting"
+        exit 1
+    ;;
+esac

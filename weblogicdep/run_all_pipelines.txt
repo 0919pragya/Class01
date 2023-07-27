@@ -1,0 +1,282 @@
+pipeline {
+   agent any
+   
+ parameters {
+    choice(name: 'ENVIRONMENT', choices: 'None\nL2\nL3\nL3DR\nL4\nPROD\nPRODDR', description: 'Target Environment')
+	choice(name: 'BRANCH_NAME', choices: 'condor_dev\ncondor_main', description: 'select BRANCH NAME')
+    choice(name: 'ACTION', choices: 'None\ndeploy component\nredeploy component\nlog4j\ncopyconfigfiles', description: 'Target Action')
+  } //End of params
+  
+   stages {
+       stage('dmi_usdom') {
+            steps {
+                script {
+                    // Get the selected choices from parameters
+                    def ENV = params.ENVIRONMENT
+                    def ACN = params.ACTION
+					def BRANCH_NAME = params.BRANCH_NAME
+
+                    // Trigger another pipeline and pass the selected choices as parameters
+                    build job: 'dmi_usdom', propagate: false,
+                        parameters: [
+                            string(name: 'ENVIRONMENT', value: ENV),
+							string(name: 'BRANCH_NAME', value: BRANCH_NAME),
+                            string(name: 'ACTION', value: ACN)
+							
+                        ]
+                }
+            }
+       }
+
+
+       stage('dtv_usdom') {
+            steps {
+                script {
+                    // Get the selected choices from parameters
+                    def ENV = params.ENVIRONMENT
+                    def ACN = params.ACTION
+					def BRANCH_NAME = params.BRANCH_NAME
+
+                    // Trigger another pipeline and pass the selected choices as parameters
+                    build job: 'dtv_usdom', propagate: false,
+                        parameters: [
+                            string(name: 'ENVIRONMENT', value: ENV),
+							string(name: 'BRANCH_NAME', value: BRANCH_NAME),
+                            string(name: 'ACTION', value: ACN)
+							
+                        ]
+                }
+            }
+       }
+       stage('ede_usdom') {
+            steps {
+                script {
+                    // Get the selected choices from parameters
+                    def ENV = params.ENVIRONMENT
+                    def ACN = params.ACTION
+					def BRANCH_NAME = params.BRANCH_NAME
+
+                    // Trigger another pipeline and pass the selected choices as parameters
+                    build job: 'ede_usdom', propagate: false,
+                        parameters: [
+                            string(name: 'ENVIRONMENT', value: ENV),
+							string(name: 'BRANCH_NAME', value: BRANCH_NAME),
+                            string(name: 'ACTION', value: ACN)
+							
+                        ]
+                }
+            }
+       }
+       stage('genccob_usdom') {
+            steps {
+                script {
+                    // Get the selected choices from parameters
+                    def ENV = params.ENVIRONMENT
+                    def ACN = params.ACTION
+					def BRANCH_NAME = params.BRANCH_NAME
+
+                    // Trigger another pipeline and pass the selected choices as parameters
+                    build job: 'genccob_usdom', propagate: false,
+                        parameters: [
+                            string(name: 'ENVIRONMENT', value: ENV),
+							string(name: 'BRANCH_NAME', value: BRANCH_NAME),
+                            string(name: 'ACTION', value: ACN)
+							
+                        ]
+                }
+            }
+       }
+       stage('genrecogagent_usdom') {
+            steps {
+                script {
+                    // Get the selected choices from parameters
+                    def ENV = params.ENVIRONMENT
+                    def ACN = params.ACTION
+					def BRANCH_NAME = params.BRANCH_NAME
+
+                    // Trigger another pipeline and pass the selected choices as parameters
+                    build job: 'genrecogagent_usdom', propagate: false,
+                        parameters: [
+                            string(name: 'ENVIRONMENT', value: ENV),
+							string(name: 'BRANCH_NAME', value: BRANCH_NAME),
+                            string(name: 'ACTION', value: ACN)
+							
+                        ]
+                }
+            }
+       }
+       stage('genrecogparser_usdom') {
+            steps {
+                script {
+                    // Get the selected choices from parameters
+                    def ENV = params.ENVIRONMENT
+                    def ACN = params.ACTION
+					def BRANCH_NAME = params.BRANCH_NAME
+
+                    // Trigger another pipeline and pass the selected choices as parameters
+                    build job: 'genrecogparser_usdom', propagate: false,
+                        parameters: [
+                            string(name: 'ENVIRONMENT', value: ENV),
+							string(name: 'BRANCH_NAME', value: BRANCH_NAME),
+                            string(name: 'ACTION', value: ACN)
+							
+                        ]
+                }
+            }
+       }
+       stage('resize_usdom') {
+            steps {
+                script {
+                    // Get the selected choices from parameters
+                    def ENV = params.ENVIRONMENT
+                    def ACN = params.ACTION
+					def BRANCH_NAME = params.BRANCH_NAME
+
+                    // Trigger another pipeline and pass the selected choices as parameters
+                    build job: 'resize_usdom', propagate: false,
+                        parameters: [
+                            string(name: 'ENVIRONMENT', value: ENV),
+							string(name: 'BRANCH_NAME', value: BRANCH_NAME),
+                            string(name: 'ACTION', value: ACN)
+							
+                        ]
+                }
+            }
+       }
+       stage('soe_usdom') {
+            steps {
+                script {
+                    // Get the selected choices from parameters
+                    def ENV = params.ENVIRONMENT
+                    def ACN = params.ACTION
+					def BRANCH_NAME = params.BRANCH_NAME
+
+                    // Trigger another pipeline and pass the selected choices as parameters
+                    build job: 'soe_usdom', propagate: false,
+                        parameters: [
+                            string(name: 'ENVIRONMENT', value: ENV),
+							string(name: 'BRANCH_NAME', value: BRANCH_NAME),
+                            string(name: 'ACTION', value: ACN)
+							
+                        ]
+                }
+            }
+       }
+       stage('transfertovendor_usdom') {
+            steps {
+                script {
+                    // Get the selected choices from parameters
+                    def ENV = params.ENVIRONMENT
+                    def ACN = params.ACTION
+					def BRANCH_NAME = params.BRANCH_NAME
+
+                    // Trigger another pipeline and pass the selected choices as parameters
+                    build job: 'transfertovendor_usdom', propagate: false,
+                        parameters: [
+                            string(name: 'ENVIRONMENT', value: ENV),
+							string(name: 'BRANCH_NAME', value: BRANCH_NAME),
+                            string(name: 'ACTION', value: ACN)
+							
+                        ]
+                }
+            }
+       }
+       
+       stage('unrecievedbatchreporter_usdom') {
+            steps {
+                script {
+                    // Get the selected choices from parameters
+                    def ENV = params.ENVIRONMENT
+                    def ACN = params.ACTION
+					def BRANCH_NAME = params.BRANCH_NAME
+
+                    // Trigger another pipeline and pass the selected choices as parameters
+                    build job: 'unrecievedbatchreporter_usdom', propagate: false,
+                        parameters: [
+                            string(name: 'ENVIRONMENT', value: ENV),
+							string(name: 'BRANCH_NAME', value: BRANCH_NAME),
+                            string(name: 'ACTION', value: ACN)
+							
+                        ]
+                }
+            }
+       }
+       
+       stage('updatedb_usdom') {
+            steps {
+                script {
+                    // Get the selected choices from parameters
+                    def ENV = params.ENVIRONMENT
+                    def ACN = params.ACTION
+					def BRANCH_NAME = params.BRANCH_NAME
+
+                    // Trigger another pipeline and pass the selected choices as parameters
+                    build job: 'updatedb_usdom', propagate: false,
+                        parameters: [
+                            string(name: 'ENVIRONMENT', value: ENV),
+							string(name: 'BRANCH_NAME', value: BRANCH_NAME),
+                            string(name: 'ACTION', value: ACN)
+							
+                        ]
+                }
+            }
+       }
+       stage('uslookup_usdom') {
+            steps {
+                script {
+                    // Get the selected choices from parameters
+                    def ENV = params.ENVIRONMENT
+                    def ACN = params.ACTION
+					def BRANCH_NAME = params.BRANCH_NAME
+
+                    // Trigger another pipeline and pass the selected choices as parameters
+                    build job: 'uslookup_usdom', propagate: false,
+                        parameters: [
+                            string(name: 'ENVIRONMENT', value: ENV),
+							string(name: 'BRANCH_NAME', value: BRANCH_NAME),
+                            string(name: 'ACTION', value: ACN)
+							
+                        ]
+                }
+            }
+       }
+       stage('vallocate_usdom') {
+            steps {
+                script {
+                    // Get the selected choices from parameters
+                    def ENV = params.ENVIRONMENT
+                    def ACN = params.ACTION
+					def BRANCH_NAME = params.BRANCH_NAME
+
+                    // Trigger another pipeline and pass the selected choices as parameters
+                    build job: 'vallocate_usdom', propagate: false,
+                        parameters: [
+                            string(name: 'ENVIRONMENT', value: ENV),
+							string(name: 'BRANCH_NAME', value: BRANCH_NAME),
+                            string(name: 'ACTION', value: ACN)
+							
+                        ]
+                }
+            }
+       }
+       stage('vrecieve_usdom') {
+            steps {
+                script {
+                    // Get the selected choices from parameters
+                    def ENV = params.ENVIRONMENT
+                    def ACN = params.ACTION
+					def BRANCH_NAME = params.BRANCH_NAME
+
+                    // Trigger another pipeline and pass the selected choices as parameters
+                    build job: 'vrecieve_usdom', propagate: false,
+                        parameters: [
+                            string(name: 'ENVIRONMENT', value: ENV),
+							string(name: 'BRANCH_NAME', value: BRANCH_NAME),
+                            string(name: 'ACTION', value: ACN)
+							
+                        ]
+                }
+            }
+       }
+   }
+}
